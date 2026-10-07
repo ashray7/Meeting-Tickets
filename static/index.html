@@ -8,59 +8,94 @@
 </head>
 <body>
 
-  <!-- Top Bar -->
-  <header class="top-bar" role="banner">
-    <div class="brand">
-      <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-        <polyline points="14 2 14 8 20 8"></polyline>
-        <line x1="16" y1="13" x2="8" y2="13"></line>
-        <line x1="16" y1="17" x2="8" y2="17"></line>
-        <polyline points="10 9 9 9 8 9"></polyline>
-      </svg>
-      <span>Meeting Tickets</span>
-    </div>
+  <!-- App Shell with Sidebar -->
+  <div class="app-layout">
 
-    <div class="top-bar-right">
-      <!-- Return to start view (visible during results state) -->
-      <button id="btn-new-meeting" class="btn-new-meeting" type="button" aria-label="Start new meeting">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-        <span>New meeting</span>
-      </button>
-
-      <!-- Whisper Model Pill -->
-      <div id="pill-whisper" class="model-pill" title="Whisper transcription model">
-        <span class="model-pill-prefix">Whisper:</span>
-        <span id="pill-whisper-label" class="model-pill-label">Loading...</span>
-        <select id="select-whisper" aria-label="Select Whisper Model"></select>
+    <!-- Left Sidebar (Always Visible, collapses on narrow screens) -->
+    <aside class="sidebar" role="navigation" aria-label="Main Navigation">
+      <div class="sidebar-header">
+        <div class="brand">
+          <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          <span class="brand-text">Meeting Tickets</span>
+        </div>
       </div>
 
-      <!-- LLM Model Pill -->
-      <div id="pill-llm" class="model-pill" title="LLM ticket extraction model">
-        <span class="model-pill-prefix">LLM:</span>
-        <span id="pill-llm-label" class="model-pill-label">Loading...</span>
-        <select id="select-llm" aria-label="Select LLM Model"></select>
-      </div>
+      <nav class="sidebar-nav">
+        <a href="#/transcribe" id="nav-transcribe" class="nav-item active" title="Transcribe">
+          <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+          </svg>
+          <span class="nav-label">Transcribe</span>
+        </a>
+        <a href="#/projects" id="nav-projects" class="nav-item" title="Projects">
+          <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span class="nav-label">Projects</span>
+        </a>
+      </nav>
+    </aside>
 
-      <!-- System Health Indicator Button -->
-      <button id="status-btn" class="status-btn" type="button" aria-label="System status & environment" aria-expanded="false" aria-controls="env-popover">
-        <span id="status-dot" class="status-dot loading" aria-hidden="true"></span>
-        <span id="status-summary">Checking...</span>
-      </button>
+    <!-- Main Workspace Area -->
+    <div class="main-content-wrapper">
 
-      <!-- Diagnostics Drawer Toggle Button -->
-      <button id="btn-diagnostics" class="btn-diagnostics" type="button" aria-label="Open diagnostics drawer" aria-controls="drawer">
-        <span id="diag-error-badge" class="badge-err" aria-hidden="true"></span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-        </svg>
-        <span>Diagnostics</span>
-      </button>
-    </div>
-  </header>
+      <!-- Top Bar -->
+      <header class="top-bar" role="banner">
+        <div class="top-bar-left">
+          <span id="top-bar-title" class="top-bar-title">Transcribe</span>
+        </div>
+
+        <div id="top-bar-transcribe-controls" class="top-bar-right">
+          <!-- Return to start view (visible during results state) -->
+          <button id="btn-new-meeting" class="btn-new-meeting" type="button" aria-label="Start new meeting">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>New meeting</span>
+          </button>
+
+          <!-- Whisper Model Pill -->
+          <div id="pill-whisper" class="model-pill" title="Whisper transcription model (click to change)">
+            <span class="model-pill-prefix">Whisper:</span>
+            <span id="pill-whisper-label" class="model-pill-label">Loading...</span>
+            <svg class="pill-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            <select id="select-whisper" aria-label="Select Whisper Model"></select>
+          </div>
+
+          <!-- LLM Model Pill -->
+          <div id="pill-llm" class="model-pill" title="LLM ticket extraction model (click to change)">
+            <span class="model-pill-prefix">LLM:</span>
+            <span id="pill-llm-label" class="model-pill-label">Loading...</span>
+            <svg class="pill-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            <select id="select-llm" aria-label="Select LLM Model"></select>
+          </div>
+
+          <!-- System Health Indicator Button -->
+          <button id="status-btn" class="status-btn" type="button" aria-label="System status & environment" aria-expanded="false" aria-controls="env-popover">
+            <span id="status-dot" class="status-dot loading" aria-hidden="true"></span>
+            <span id="status-summary">Checking...</span>
+          </button>
+
+          <!-- Diagnostics Drawer Toggle Button -->
+          <button id="btn-diagnostics" class="btn-diagnostics" type="button" aria-label="Open diagnostics drawer" aria-controls="drawer">
+            <span id="diag-error-badge" class="badge-err" aria-hidden="true"></span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+            <span>Diagnostics</span>
+          </button>
+        </div>
+      </header>
 
   <!-- Environment Popover -->
   <aside id="env-popover" class="popover" role="dialog" aria-label="Environment Details" aria-modal="false">
@@ -85,8 +120,10 @@
     </div>
   </aside>
 
-  <!-- Main Stage (Single Focused Workspace) -->
-  <main class="main-stage">
+      <!-- 1. Transcribe View (Existing app view) -->
+      <div id="view-transcribe" class="app-page-view active">
+        <!-- Main Stage (Single Focused Workspace) -->
+        <main class="main-stage">
 
     <!-- Inline Error Card -->
     <div id="error-card" class="error-card" role="alert" aria-live="assertive">
@@ -105,9 +142,70 @@
 
     <!-- ── State 1: Start State ("New meeting") ── -->
     <section id="state-start" class="state-view active" aria-labelledby="start-card-title">
+      
+      <!-- Prominent Model Selectors -->
+      <div class="models-selection-bar" role="region" aria-label="Model configuration">
+        <div class="model-select-group">
+          <label for="select-whisper-main" class="model-select-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+              <line x1="12" y1="19" x2="12" y2="23"></line>
+              <line x1="8" y1="23" x2="16" y2="23"></line>
+            </svg>
+            <span>Transcription (Whisper)</span>
+          </label>
+          <div class="select-wrapper">
+            <select id="select-whisper-main" class="model-dropdown" aria-label="Select Whisper model"></select>
+            <svg class="chevron-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </div>
+        </div>
+
+        <div class="model-select-group">
+          <label for="select-llm-main" class="model-select-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+            <span>AI Model (Tickets)</span>
+          </label>
+          <div class="select-wrapper">
+            <select id="select-llm-main" class="model-dropdown" aria-label="Select LLM model"></select>
+            <svg class="chevron-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </div>
+        </div>
+      </div>
+
       <div class="input-card">
         <h2 id="start-card-title" class="sr-only" style="display: none;">Input Meeting Content</h2>
         
+        <!-- Project Selector (Required) -->
+        <div class="project-selector-wrapper">
+          <label for="select-project" class="field-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span>Project</span> <span class="required">*</span>
+          </label>
+          <div id="project-dropdown-container" class="select-wrapper">
+            <select id="select-project" class="model-dropdown project-select-input" aria-label="Select project for this meeting">
+              <option value="" disabled selected>Select a project...</option>
+            </select>
+            <svg class="chevron-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </div>
+          <div id="project-empty-alert" class="project-empty-inline-notice" style="display: none;">
+            <span>No projects exist yet.</span>
+            <a href="#/projects" class="inline-link">Create a project first</a>
+          </div>
+        </div>
+
         <!-- Input Tabs -->
         <div class="input-tabs" role="tablist" aria-label="Input mode selection">
           <button id="tab-audio-btn" class="tab-btn active" role="tab" aria-selected="true" aria-controls="pane-audio" type="button">
@@ -349,7 +447,213 @@
       </div>
     </section>
 
-  </main>
+        </main>
+      </div> <!-- /view-transcribe -->
+
+      <!-- 2. Projects List View -->
+      <div id="view-projects" class="app-page-view" style="display: none;">
+        <main class="main-stage">
+          <div class="page-header">
+            <div>
+              <h2 class="page-heading">Projects</h2>
+              <p class="page-subheading">Organize your meeting transcripts and extracted tickets.</p>
+            </div>
+            <button id="btn-create-project" class="btn-primary" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span>New project</span>
+            </button>
+          </div>
+
+          <!-- Empty State -->
+          <div id="projects-empty-state" class="empty-state-card" style="display: none;">
+            <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <h3 class="empty-state-title">No projects yet</h3>
+            <p class="empty-state-desc">Create your first project to start saving and organizing meeting tickets.</p>
+            <div style="margin-top: 1.25rem;">
+              <button id="btn-create-project-empty" class="btn-primary" type="button">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>New project</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Projects List Container -->
+          <div id="projects-list-container" class="projects-list"></div>
+        </main>
+      </div> <!-- /view-projects -->
+
+      <!-- 3. Project Detail View -->
+      <div id="view-project-detail" class="app-page-view" style="display: none;">
+        <main class="main-stage">
+          <div class="project-detail-header">
+            <a href="#/projects" class="back-link" title="Back to projects list">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>
+              <span>Back to Projects</span>
+            </a>
+            <div class="project-detail-actions">
+              <button id="btn-edit-current-project" class="btn-secondary" type="button">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                <span>Edit</span>
+              </button>
+              <button id="btn-delete-current-project" class="btn-secondary btn-danger-action" type="button">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                <span>Delete</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="project-meta-card">
+            <h2 id="project-detail-title" class="project-meta-title">Project Name</h2>
+            <p id="project-detail-desc" class="project-meta-desc"></p>
+            <div class="project-meta-footer">
+              <span id="project-detail-created" class="project-meta-date"></span>
+            </div>
+          </div>
+
+          <!-- Meetings section -->
+          <div class="project-meetings-section">
+            <h3 class="section-title">Saved Meetings</h3>
+            <div id="project-meetings-list" class="meetings-list" style="display: none;"></div>
+            <div id="project-meetings-empty" class="empty-state-card" style="padding: 2.5rem 1.5rem; display: none;">
+              <p class="empty-state-title">No meetings yet</p>
+              <p class="empty-state-desc">Transcribe audio recordings or paste meeting notes to generate tickets.</p>
+              <a href="#/transcribe" class="btn-primary" style="text-decoration: none; margin-top: 0.75rem; display: inline-flex;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>Transcribe a meeting</span>
+              </a>
+            </div>
+          </div>
+        </main>
+      </div> <!-- /view-project-detail -->
+
+      <!-- 4. Meeting Detail View (Read-only) -->
+      <div id="view-meeting-detail" class="app-page-view" style="display: none;">
+        <main class="main-stage">
+          <div class="project-detail-header">
+            <a id="meeting-breadcrumb-link" href="#/projects" class="back-link">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>
+              <span id="meeting-breadcrumb-text">Back to Project</span>
+            </a>
+          </div>
+
+          <div class="meeting-header-card">
+            <div class="meeting-meta-primary">
+              <span id="meeting-view-type-badge" class="badge">Audio</span>
+              <h2 id="meeting-view-date" class="meeting-title-date">Meeting</h2>
+            </div>
+            <div class="meeting-models-meta">
+              <span class="meta-tag">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path></svg>
+                <span id="meeting-view-whisper">whisper-base</span>
+              </span>
+              <span class="meta-tag">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                <span id="meeting-view-llm">qwen3-8b</span>
+              </span>
+            </div>
+          </div>
+
+          <div class="results-nav" style="margin-top: 1.5rem;">
+            <div class="results-tabs" role="tablist" aria-label="Meeting content switch">
+              <button id="meeting-tab-tickets-btn" class="results-tab-btn active" role="tab" aria-selected="true" type="button">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                <span>Tickets</span>
+                <span id="meeting-tickets-count-badge" class="results-tab-count">0</span>
+              </button>
+              <button id="meeting-tab-transcript-btn" class="results-tab-btn" role="tab" aria-selected="false" type="button">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                </svg>
+                <span>Transcript</span>
+              </button>
+            </div>
+
+            <div class="results-actions">
+              <button id="btn-meeting-copy-all" class="btn-secondary" type="button">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                <span>Copy all (Markdown)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Meeting Tickets List -->
+          <div id="meeting-tickets-list" class="tickets-list"></div>
+
+          <!-- Meeting Transcript Card -->
+          <div id="meeting-transcript-card" class="transcript-card" style="display: none;"></div>
+        </main>
+      </div> <!-- /view-meeting-detail -->
+
+    </div> <!-- /main-content-wrapper -->
+  </div> <!-- /app-layout -->
+
+  <!-- ── Project Create / Edit Dialog ── -->
+  <dialog id="project-dialog" class="app-dialog" aria-labelledby="project-dialog-title">
+    <form id="project-dialog-form" method="dialog">
+      <div class="dialog-header">
+        <h3 id="project-dialog-title" class="dialog-title">New project</h3>
+        <button id="btn-close-project-dialog" class="dialog-close-btn" type="button" aria-label="Close dialog">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div id="project-dialog-error" class="dialog-error-msg" style="display: none;" role="alert"></div>
+        <div class="form-field">
+          <label for="project-name-input" class="field-label">Project name <span class="required">*</span></label>
+          <input type="text" id="project-name-input" class="text-input" maxlength="100" placeholder="e.g. Core Platform" required autocomplete="off">
+          <div class="field-hint">Max 100 characters, unique ignoring case</div>
+        </div>
+        <div class="form-field">
+          <label for="project-desc-input" class="field-label">Description</label>
+          <textarea id="project-desc-input" class="text-input textarea-input" rows="3" maxlength="500" placeholder="Optional context or goals for this project..."></textarea>
+          <div class="field-hint">Optional, max 500 characters</div>
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <button id="btn-cancel-project" class="btn-secondary" type="button">Cancel</button>
+        <button id="btn-save-project" class="btn-primary" type="submit">
+          <span id="btn-save-project-text">Save project</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ── Delete Project Confirmation Dialog ── -->
+  <dialog id="delete-dialog" class="app-dialog" aria-labelledby="delete-dialog-title">
+    <div class="dialog-header">
+      <h3 id="delete-dialog-title" class="dialog-title">Delete project</h3>
+      <button id="btn-close-delete-dialog" class="dialog-close-btn" type="button" aria-label="Close dialog">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="dialog-body">
+      <p class="dialog-warning-text">
+        Are you sure you want to delete <strong id="delete-project-name">Project</strong>?
+      </p>
+      <p id="delete-meetings-warning" class="dialog-warning-sub">
+        This will also delete <span id="delete-meetings-count">0</span> saved meetings.
+      </p>
+    </div>
+    <div class="dialog-footer">
+      <button id="btn-cancel-delete" class="btn-secondary" type="button">Cancel</button>
+      <button id="btn-confirm-delete" class="btn-danger-confirm" type="button">
+        <span id="btn-confirm-delete-text">Delete project</span>
+      </button>
+    </div>
+  </dialog>
 
   <!-- ── Diagnostics Slide-over Drawer ── -->
   <div id="drawer-backdrop" class="drawer-backdrop" aria-hidden="true"></div>

@@ -4,7 +4,7 @@ Manages whisper-server and llama-server processes,
 proxies requests, and streams diagnostics via SSE.
 """
 
-import asyncio, hashlib, json, logging, os, re, shutil, subprocess, time, uuid
+import asyncio, hashlib, json, logging, os, re, shutil, sqlite3, subprocess, time, uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -14,6 +14,7 @@ import yaml
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 # ── Logging ────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -30,6 +31,44 @@ PROMPT_PATH = BASE_DIR / "prompts" / "tickets.txt"
 STATIC_DIR = BASE_DIR / "static"
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
+DATA_DIR = BASE_DIR / "data"
+DATA_DIR.mkdir(exist_ok=True)
+DB_PATH = DATA_DIR / "meeting_tickets.db"
+
+# ── SQLite Database ────────────────────────────────────────────────
+def get_db():
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
+    return conn
+
+def init_db():
+    DATA_DIR.mkdir(exist_ok=True)
+    with get_db() as conn:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS projects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                description TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS meetings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                input_type TEXT NOT NULL,
+                transcript TEXT NOT NULL,
+                tickets_json TEXT NOT NULL,
+                whisper_model TEXT,
+                llm_model TEXT,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+            );
+        """)
+    log.info(f"Database initialized at {DB_PATH}")
+
+init_db()
 
 # ── Load config ────────────────────────────────────────────────────
 def load_config():
@@ -338,6 +377,211 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 @app.get("/")
 async def index():
     return FileResponse(STATIC_DIR / "index.html")
+
+
+# ── Project Schemas & Endpoints ────────────────────────────────────
+
+class ProjectCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+class ProjectUpdate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+@app.get("/api/projects")
+async def list_projects():
+    """List all projects ordered newest first, with meeting_count."""
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT p.id, p.name, p.description, p.created_at, p.updated_at,
+                   COUNT(m.id) AS meeting_count
+            FROM projects p
+            LEFT JOIN meetings m ON p.id = m.project_id
+            GROUP BY p.id
+            ORDER BY p.created_at DESC
+        """).fetchall()
+        return [dict(r) for r in rows]
+
+
+@app.post("/api/projects", status_code=201)
+async def create_project(body: ProjectCreate):
+    """Create a new project."""
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Project name is required.")
+    if len(name) > 100:
+        raise HTTPException(status_code=400, detail="Project name cannot exceed 100 characters.")
+
+    desc = (body.description or "").strip()
+    if len(desc) > 500:
+        raise HTTPException(status_code=400, detail="Description cannot exceed 500 characters.")
+
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        with get_db() as conn:
+            cur = conn.execute(
+                "INSERT INTO projects (name, description, created_at, updated_at) VALUES (?, ?, ?, ?)",
+                (name, desc if desc else None, now, now)
+            )
+            project_id = cur.lastrowid
+            return {
+                "id": project_id,
+                "name": name,
+                "description": desc if desc else None,
+                "created_at": now,
+                "updated_at": now,
+                "meeting_count": 0,
+            }
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=400, detail="A project with this name already exists.")
+
+
+@app.get("/api/projects/{project_id}")
+async def get_project(project_id: int):
+    """Get single project detail with meeting_count."""
+    with get_db() as conn:
+        row = conn.execute("""
+            SELECT p.id, p.name, p.description, p.created_at, p.updated_at,
+                   COUNT(m.id) AS meeting_count
+            FROM projects p
+            LEFT JOIN meetings m ON p.id = m.project_id
+            WHERE p.id = ?
+            GROUP BY p.id
+        """, (project_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Project not found.")
+        return dict(row)
+
+
+@app.put("/api/projects/{project_id}")
+async def update_project(project_id: int, body: ProjectUpdate):
+    """Update a project's name and description."""
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Project name is required.")
+    if len(name) > 100:
+        raise HTTPException(status_code=400, detail="Project name cannot exceed 100 characters.")
+
+    desc = (body.description or "").strip()
+    if len(desc) > 500:
+        raise HTTPException(status_code=400, detail="Description cannot exceed 500 characters.")
+
+    with get_db() as conn:
+        existing = conn.execute("SELECT id FROM projects WHERE id = ?", (project_id,)).fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Project not found.")
+
+        # Check duplicate name on another project
+        duplicate = conn.execute(
+            "SELECT id FROM projects WHERE name = ? COLLATE NOCASE AND id != ?",
+            (name, project_id)
+        ).fetchone()
+        if duplicate:
+            raise HTTPException(status_code=400, detail="A project with this name already exists.")
+
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "UPDATE projects SET name = ?, description = ?, updated_at = ? WHERE id = ?",
+            (name, desc if desc else None, now, project_id)
+        )
+
+        updated = conn.execute("""
+            SELECT p.id, p.name, p.description, p.created_at, p.updated_at,
+                   COUNT(m.id) AS meeting_count
+            FROM projects p
+            LEFT JOIN meetings m ON p.id = m.project_id
+            WHERE p.id = ?
+            GROUP BY p.id
+        """, (project_id,)).fetchone()
+        return dict(updated)
+
+
+@app.delete("/api/projects/{project_id}")
+async def delete_project(project_id: int):
+    """Delete a project and cascade delete all its meetings."""
+    with get_db() as conn:
+        existing = conn.execute("SELECT id FROM projects WHERE id = ?", (project_id,)).fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Project not found.")
+
+        conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+        return {"ok": True, "deleted_id": project_id}
+
+
+@app.get("/api/projects/{project_id}/meetings")
+async def list_project_meetings(project_id: int):
+    """List lightweight meetings for a project, newest first."""
+    with get_db() as conn:
+        proj = conn.execute("SELECT id FROM projects WHERE id = ?", (project_id,)).fetchone()
+        if not proj:
+            raise HTTPException(status_code=404, detail="Project not found.")
+
+        rows = conn.execute("""
+            SELECT id, project_id, created_at, input_type, whisper_model, llm_model,
+                   transcript, tickets_json
+            FROM meetings
+            WHERE project_id = ?
+            ORDER BY created_at DESC
+        """, (project_id,)).fetchall()
+
+        meetings = []
+        for r in rows:
+            raw_transcript = r["transcript"] or ""
+            snippet = raw_transcript[:120] + ("..." if len(raw_transcript) > 120 else "")
+
+            try:
+                tickets_data = json.loads(r["tickets_json"]) if r["tickets_json"] else []
+                ticket_count = len(tickets_data) if isinstance(tickets_data, list) else 0
+            except Exception:
+                ticket_count = 0
+
+            meetings.append({
+                "id": r["id"],
+                "project_id": r["project_id"],
+                "created_at": r["created_at"],
+                "input_type": r["input_type"],
+                "whisper_model": r["whisper_model"],
+                "llm_model": r["llm_model"],
+                "ticket_count": ticket_count,
+                "transcript_snippet": snippet,
+            })
+        return meetings
+
+
+@app.get("/api/meetings/{meeting_id}")
+async def get_meeting(meeting_id: int):
+    """Get full meeting details including transcript and tickets."""
+    with get_db() as conn:
+        row = conn.execute("""
+            SELECT m.id, m.project_id, m.created_at, m.input_type,
+                   m.whisper_model, m.llm_model, m.transcript, m.tickets_json,
+                   p.name AS project_name
+            FROM meetings m
+            LEFT JOIN projects p ON m.project_id = p.id
+            WHERE m.id = ?
+        """, (meeting_id,)).fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Meeting not found.")
+
+        try:
+            tickets = json.loads(row["tickets_json"]) if row["tickets_json"] else []
+        except Exception:
+            tickets = []
+
+        return {
+            "id": row["id"],
+            "project_id": row["project_id"],
+            "project_name": row["project_name"] or f"Project #{row['project_id']}",
+            "created_at": row["created_at"],
+            "input_type": row["input_type"],
+            "whisper_model": row["whisper_model"],
+            "llm_model": row["llm_model"],
+            "transcript": row["transcript"] or "",
+            "tickets": tickets,
+        }
 
 
 @app.get("/api/health")
@@ -676,8 +920,9 @@ async def extract_tickets(text: str, job: Job) -> list[dict]:
 # ── Full pipeline ─────────────────────────────────────────────────
 
 async def run_pipeline(job: Job, text: Optional[str], audio_path: Optional[Path],
-                       audio_filename: Optional[str], audio_size: Optional[int]):
-    """Run the full ticket extraction pipeline."""
+                       audio_filename: Optional[str], audio_size: Optional[int],
+                       project_id: int):
+    """Run the full ticket extraction pipeline and save meeting to project."""
     t0 = time.monotonic()
     transcript = text or ""
 
@@ -723,11 +968,39 @@ async def run_pipeline(job: Job, text: Optional[str], audio_path: Optional[Path]
             if evt.get("elapsed_s") is not None:
                 stage_times[s] = evt["elapsed_s"]
 
+        # Save meeting row to database
+        saved_meeting_id = None
+        save_error = None
+        try:
+            now = datetime.now(timezone.utc).isoformat()
+            input_type = "audio" if audio_path else "text"
+            whisper_mod = whisper_srv.model_id
+            llm_mod = llama_srv.model_id
+            tickets_json_str = json.dumps(tickets)
+
+            with get_db() as conn:
+                cur = conn.execute(
+                    """
+                    INSERT INTO meetings (
+                        project_id, created_at, input_type,
+                        transcript, tickets_json, whisper_model, llm_model
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (project_id, now, input_type, transcript, tickets_json_str, whisper_mod, llm_mod)
+                )
+                saved_meeting_id = cur.lastrowid
+                log.info(f"Saved meeting {saved_meeting_id} under project {project_id}")
+        except Exception as db_err:
+            log.error(f"Failed to save meeting to DB: {db_err}")
+            save_error = str(db_err)
+
         job.emit("done", "done",
                  total_elapsed_s=total,
                  stage_times=stage_times,
                  tickets=tickets,
-                 transcript=transcript)
+                 transcript=transcript,
+                 meeting_id=saved_meeting_id,
+                 save_error=save_error)
 
     except Exception as e:
         total = round(time.monotonic() - t0, 2)
@@ -738,10 +1011,16 @@ async def run_pipeline(job: Job, text: Optional[str], audio_path: Optional[Path]
 
 @app.post("/api/jobs")
 async def create_job(
+    project_id: int = Form(...),
     text: Optional[str] = Form(None),
     audio: Optional[UploadFile] = File(None),
 ):
-    """Create a ticket extraction job. Send text or audio (not both)."""
+    """Create a ticket extraction job. Requires valid project_id."""
+    with get_db() as conn:
+        proj = conn.execute("SELECT id FROM projects WHERE id = ?", (project_id,)).fetchone()
+        if not proj:
+            raise HTTPException(400, f"Project with ID {project_id} does not exist.")
+
     if not text and not audio:
         raise HTTPException(400, "Provide either 'text' or 'audio'")
 
@@ -763,7 +1042,7 @@ async def create_job(
         text = None  # audio takes priority
 
     # Run pipeline in background
-    asyncio.create_task(run_pipeline(job, text, audio_path, audio_filename, audio_size))
+    asyncio.create_task(run_pipeline(job, text, audio_path, audio_filename, audio_size, project_id))
 
     return {"job_id": job_id}
 
