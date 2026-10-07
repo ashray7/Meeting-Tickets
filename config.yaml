@@ -1,0 +1,74 @@
+# Meeting Tickets — configuration
+# backend: auto | cuda | vulkan  (auto = detect GPU type at startup)
+backend: auto
+
+# Ports for the local inference servers
+whisper_port: 8178
+llama_port: 8179
+
+# ── Whisper server binary ──────────────────────────────────────────
+whisper_bin: /home/ashray/.local/bin/whisper-server
+# Extra LD_LIBRARY_PATH so the Vulkan libs are found
+whisper_lib_path: /home/ashray/.local/lib
+
+# ── Llama server binary ───────────────────────────────────────────
+llama_bin: /usr/local/lib/ollama/llama-server
+# Folder containing the Vulkan GPU backend (.so) for llama.cpp
+llama_vulkan_lib: /usr/local/lib/ollama/vulkan
+
+# ── Model registry ────────────────────────────────────────────────
+# Each entry: id, name (shown in UI), path on disk, type (whisper|llm),
+#   and optional extra_flags passed to the server on startup.
+models:
+  # Whisper models (ggml format)
+  - id: whisper-tiny
+    name: "Whisper tiny"
+    type: whisper
+    path: /home/ashray/.cache/clipforge/whisper.cpp/ggml-tiny.bin
+
+  - id: whisper-base
+    name: "Whisper base"
+    type: whisper
+    path: /home/ashray/.cache/clipforge/whisper.cpp/ggml-base.bin
+
+  - id: whisper-small
+    name: "Whisper small"
+    type: whisper
+    path: /home/ashray/.cache/clipforge/whisper.cpp/ggml-small.bin
+
+  - id: whisper-medium
+    name: "Whisper medium"
+    type: whisper
+    path: /home/ashray/.cache/clipforge/whisper.cpp/ggml-medium.bin
+
+  - id: whisper-large-v3-turbo
+    name: "Whisper large-v3-turbo"
+    type: whisper
+    path: /home/ashray/.cache/clipforge/whisper.cpp/ggml-large-v3-turbo.bin
+
+  # LLM models (GGUF format, via ollama blobs)
+  - id: qwen3-4b
+    name: "Qwen3 4B"
+    type: llm
+    path: /usr/share/ollama/.ollama/models/blobs/sha256-3e4cb14174460404e7a233e531675303b2fbf7749c02f91864fe311ab6344e4f
+    ollama_name: "qwen3:4b"
+    extra_flags: ["--reasoning", "off"]
+
+  - id: qwen3-8b
+    name: "Qwen3 8B"
+    type: llm
+    path: /usr/share/ollama/.ollama/models/blobs/sha256-a3de86cd1c132c822487ededd47a324c50491393e6565cd14bafa40d0b8e686f
+    ollama_name: "qwen3:8b"
+    extra_flags: ["--reasoning", "off"]
+
+  - id: llama3.2-3b
+    name: "Llama 3.2 3B Instruct"
+    type: llm
+    path: /usr/share/ollama/.ollama/models/blobs/sha256-dde5aa3fc5ffc17176b5e8bdc82f587b24b2678c6c66101bf7da77af9f7ccdff
+    ollama_name: "llama3.2:latest"
+    extra_flags: []
+
+# Default model IDs (used on first startup)
+default_whisper: whisper-small
+default_llm: qwen3-4b
+
