@@ -4,851 +4,383 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Meeting Tickets</title>
-  <style>
-    :root {
-      --bg: #0f172a;
-      --surface: #1e293b;
-      --surface-border: #334155;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --primary: #38bdf8;
-      --primary-hover: #0284c7;
-      --success: #22c55e;
-      --warning: #f59e0b;
-      --danger: #ef4444;
-      --badge-bg: #334155;
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background-color: var(--bg);
-      color: var(--text);
-      line-height: 1.5;
-      padding: 1.5rem;
-      max-width: 1000px;
-      margin: 0 auto;
-    }
-
-    header {
-      margin-bottom: 1.5rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid var(--surface-border);
-      padding-bottom: 1rem;
-    }
-    h1 { font-size: 1.5rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 0.5rem; }
-
-    /* Environment Panel */
-    .env-panel {
-      background: var(--surface);
-      border: 1px solid var(--surface-border);
-      border-radius: 8px;
-      padding: 0.85rem 1rem;
-      margin-bottom: 1.5rem;
-      font-size: 0.85rem;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1.25rem;
-      align-items: center;
-    }
-    .env-item { display: flex; align-items: center; gap: 0.4rem; }
-    .env-label { color: var(--text-muted); font-weight: 500; }
-    .status-dot {
-      width: 8px; height: 8px; border-radius: 50%; display: inline-block;
-    }
-    .status-dot.up { background: var(--success); box-shadow: 0 0 6px var(--success); }
-    .status-dot.loading { background: var(--warning); animation: pulse 1s infinite alternate; }
-    .status-dot.down, .status-dot.error { background: var(--danger); }
-    @keyframes pulse { from { opacity: 0.4; } to { opacity: 1; } }
-
-    /* Model Selectors */
-    .models-bar {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem;
-      margin-bottom: 1.5rem;
-    }
-    .field-group { display: flex; flex-direction: column; gap: 0.35rem; }
-    .field-label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
-    select, textarea, input[type="file"] {
-      width: 100%;
-      background: var(--surface);
-      border: 1px solid var(--surface-border);
-      color: var(--text);
-      padding: 0.6rem 0.8rem;
-      border-radius: 6px;
-      font-size: 0.9rem;
-      outline: none;
-    }
-    select:focus, textarea:focus { border-color: var(--primary); }
-
-    /* Input Section */
-    .input-card {
-      background: var(--surface);
-      border: 1px solid var(--surface-border);
-      border-radius: 8px;
-      padding: 1.25rem;
-      margin-bottom: 1.5rem;
-    }
-    .tabs { display: flex; gap: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--surface-border); }
-    .tab-btn {
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      font-size: 0.95rem;
-      font-weight: 600;
-      padding: 0.5rem 0.25rem;
-      cursor: pointer;
-      position: relative;
-    }
-    .tab-btn.active { color: var(--primary); }
-    .tab-btn.active::after {
-      content: "";
-      position: absolute;
-      bottom: -1px;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: var(--primary);
-    }
-    .tab-pane { display: none; }
-    .tab-pane.active { display: block; }
-    textarea { min-height: 120px; resize: vertical; }
-
-    .action-row {
-      margin-top: 1rem;
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      gap: 1rem;
-    }
-    button.btn-primary {
-      background: var(--primary);
-      color: #0f172a;
-      font-weight: 600;
-      padding: 0.65rem 1.4rem;
-      border: none;
-      border-radius: 6px;
-      font-size: 0.95rem;
-      cursor: pointer;
-      transition: background 0.15s;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    button.btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
-    button.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    /* Diagnostics Panel */
-    .diagnostics-panel {
-      background: var(--surface);
-      border: 1px solid var(--surface-border);
-      border-radius: 8px;
-      padding: 1.25rem;
-      margin-bottom: 1.5rem;
-    }
-    .panel-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1rem;
-    }
-    .panel-title { font-size: 1rem; font-weight: 600; }
-    .stages-list { display: flex; flex-direction: column; gap: 0.5rem; }
-    .stage-row {
-      display: grid;
-      grid-template-columns: 24px 180px 100px 1fr;
-      align-items: center;
-      font-size: 0.85rem;
-      padding: 0.4rem 0.5rem;
-      border-radius: 4px;
-      background: rgba(15, 23, 42, 0.4);
-    }
-    .stage-status-icon { display: flex; align-items: center; justify-content: center; }
-    .stage-name { font-weight: 600; }
-    .stage-badge {
-      font-size: 0.72rem;
-      padding: 0.15rem 0.4rem;
-      border-radius: 4px;
-      text-transform: uppercase;
-      font-weight: 700;
-      width: fit-content;
-    }
-    .stage-badge.pending { background: #475569; color: #cbd5e1; }
-    .stage-badge.running { background: var(--warning); color: #000; animation: pulse 0.7s infinite alternate; }
-    .stage-badge.done { background: var(--success); color: #000; }
-    .stage-badge.skipped { background: #334155; color: #64748b; }
-    .stage-badge.failed { background: var(--danger); color: #fff; }
-    .stage-meta { color: var(--text-muted); font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-    /* Transcript Section */
-    .transcript-box {
-      background: rgba(15, 23, 42, 0.5);
-      border: 1px solid var(--surface-border);
-      border-radius: 6px;
-      padding: 0.75rem 1rem;
-      margin-bottom: 1.5rem;
-      font-size: 0.85rem;
-    }
-    .transcript-box summary { font-weight: 600; cursor: pointer; color: var(--text-muted); margin-bottom: 0.5rem; }
-    .transcript-content { white-space: pre-wrap; color: var(--text); }
-
-    /* Ticket Cards */
-    .tickets-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1rem;
-    }
-    .ticket-grid { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem; }
-    .ticket-card {
-      background: var(--surface);
-      border: 1px solid var(--surface-border);
-      border-left: 4px solid var(--primary);
-      border-radius: 8px;
-      padding: 1.25rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      position: relative;
-    }
-    .ticket-card.high { border-left-color: var(--danger); }
-    .ticket-card.medium { border-left-color: var(--warning); }
-    .ticket-card.low { border-left-color: var(--success); }
-
-    .ticket-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 1rem;
-    }
-    .ticket-title { font-size: 1.05rem; font-weight: 700; color: #fff; }
-    .ticket-badges { display: flex; gap: 0.5rem; align-items: center; }
-    .badge {
-      font-size: 0.75rem;
-      padding: 0.2rem 0.5rem;
-      border-radius: 9999px;
-      font-weight: 600;
-      background: var(--badge-bg);
-      color: var(--text-muted);
-    }
-    .badge.p-high { background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid var(--danger); }
-    .badge.p-medium { background: rgba(245, 158, 11, 0.2); color: #fde68a; border: 1px solid var(--warning); }
-    .badge.p-low { background: rgba(34, 197, 94, 0.2); color: #86efac; border: 1px solid var(--success); }
-    .badge.assignee { background: rgba(56, 189, 248, 0.15); color: var(--primary); border: 1px solid var(--primary); }
-
-    .ticket-desc { font-size: 0.9rem; color: #cbd5e1; }
-    .ticket-ac-title { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); }
-    .ticket-ac-list { list-style: disc inside; font-size: 0.85rem; color: #94a3b8; }
-
-    .btn-copy {
-      background: transparent;
-      border: 1px solid var(--surface-border);
-      color: var(--text-muted);
-      border-radius: 4px;
-      padding: 0.35rem 0.75rem;
-      font-size: 0.75rem;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.3rem;
-      width: fit-content;
-      margin-top: 0.25rem;
-      transition: all 0.15s;
-    }
-    .btn-copy:hover { color: #fff; border-color: var(--primary); background: rgba(56, 189, 248, 0.1); }
-    .btn-copy.copied { border-color: var(--success); color: var(--success); }
-
-    /* Raw Logs */
-    .logs-panel {
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid var(--surface-border);
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-      margin-top: 2rem;
-    }
-    .logs-panel summary {
-      cursor: pointer;
-      font-weight: 600;
-      color: var(--text-muted);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .logs-pre {
-      background: #090d16;
-      border: 1px solid var(--surface-border);
-      border-radius: 6px;
-      padding: 0.75rem;
-      margin-top: 0.75rem;
-      font-family: monospace;
-      font-size: 0.75rem;
-      color: #94a3b8;
-      max-height: 250px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-    }
-    .btn-small {
-      background: var(--surface);
-      border: 1px solid var(--surface-border);
-      color: var(--text);
-      font-size: 0.75rem;
-      padding: 0.25rem 0.6rem;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    .btn-small:hover { border-color: var(--primary); }
-    .error-banner {
-      background: rgba(239, 68, 68, 0.15);
-      border: 1px solid var(--danger);
-      color: #fca5a5;
-      padding: 0.75rem 1rem;
-      border-radius: 6px;
-      font-size: 0.85rem;
-      margin-bottom: 1rem;
-      display: none;
-    }
-  </style>
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-  <header>
-    <h1>🎫 Meeting Tickets</h1>
-    <div style="font-size: 0.85rem; color: var(--text-muted);">Local MVP • 100% On-Device</div>
-  </header>
-
-  <!-- Environment & GPU Panel -->
-  <section class="env-panel" id="env-panel">
-    <div class="env-item">
-      <span class="env-label">Backend:</span>
-      <span id="env-backend">detecting...</span>
-    </div>
-    <div class="env-item">
-      <span class="env-label">GPU:</span>
-      <span id="env-gpu">detecting...</span>
-    </div>
-    <div class="env-item">
-      <span class="env-label">Whisper:</span>
-      <span class="status-dot down" id="dot-whisper"></span>
-      <span id="env-whisper">down</span>
-    </div>
-    <div class="env-item">
-      <span class="env-label">LLM:</span>
-      <span class="status-dot down" id="dot-llm"></span>
-      <span id="env-llm">down</span>
-    </div>
-    <div class="env-item" id="env-vram-item" style="display: none;">
-      <span class="env-label">VRAM:</span>
-      <span id="env-vram">-</span>
-    </div>
-  </section>
-
-  <!-- Model Selection -->
-  <section class="models-bar">
-    <div class="field-group">
-      <label class="field-label" for="whisper-select">Transcription Model (Whisper)</label>
-      <select id="whisper-select" onchange="handleModelChange('whisper')">
-        <option value="" disabled selected>Loading models...</option>
-      </select>
-    </div>
-    <div class="field-group">
-      <label class="field-label" for="llm-select">Ticket Model (LLM)</label>
-      <select id="llm-select" onchange="handleModelChange('llm')">
-        <option value="" disabled selected>Loading models...</option>
-      </select>
-    </div>
-  </section>
-
-  <div id="error-banner" class="error-banner"></div>
-
-  <!-- Input Section -->
-  <section class="input-card">
-    <div class="tabs">
-      <button class="tab-btn active" id="tab-audio-btn" onclick="switchTab('audio')">Upload Audio</button>
-      <button class="tab-btn" id="tab-text-btn" onclick="switchTab('text')">Paste Meeting Notes</button>
+  <!-- Top Bar -->
+  <header class="top-bar" role="banner">
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+        <polyline points="14 2 14 8 20 8"></polyline>
+        <line x1="16" y1="13" x2="8" y2="13"></line>
+        <line x1="16" y1="17" x2="8" y2="17"></line>
+        <polyline points="10 9 9 9 8 9"></polyline>
+      </svg>
+      <span>Meeting Tickets</span>
     </div>
 
-    <!-- Audio Input Tab -->
-    <div class="tab-pane active" id="pane-audio">
-      <div class="field-group">
-        <input type="file" id="audio-file" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg,.webm">
-        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
-          Supported: WAV, MP3, M4A, FLAC, OGG. Will be converted to 16 kHz mono WAV via ffmpeg.
-        </div>
+    <div class="top-bar-right">
+      <!-- Return to start view (visible during results state) -->
+      <button id="btn-new-meeting" class="btn-new-meeting" type="button" aria-label="Start new meeting">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <span>New meeting</span>
+      </button>
+
+      <!-- Whisper Model Pill -->
+      <div id="pill-whisper" class="model-pill" title="Whisper transcription model">
+        <span class="model-pill-prefix">Whisper:</span>
+        <span id="pill-whisper-label" class="model-pill-label">Loading...</span>
+        <select id="select-whisper" aria-label="Select Whisper Model"></select>
       </div>
-    </div>
 
-    <!-- Text Input Tab -->
-    <div class="tab-pane" id="pane-text">
-      <div class="field-group">
-        <textarea id="notes-text" placeholder="Paste meeting transcript or notes here... e.g. 'Sarah will fix the login bug by Friday. Mike to review docs.'"></textarea>
+      <!-- LLM Model Pill -->
+      <div id="pill-llm" class="model-pill" title="LLM ticket extraction model">
+        <span class="model-pill-prefix">LLM:</span>
+        <span id="pill-llm-label" class="model-pill-label">Loading...</span>
+        <select id="select-llm" aria-label="Select LLM Model"></select>
       </div>
-    </div>
 
-    <div class="action-row">
-      <div id="switching-indicator" style="display:none; font-size: 0.85rem; color: var(--warning);">
-        Switching model... loading
-      </div>
-      <button class="btn-primary" id="btn-generate" onclick="startGeneration()">
-        <span>Generate Tickets</span>
+      <!-- System Health Indicator Button -->
+      <button id="status-btn" class="status-btn" type="button" aria-label="System status & environment" aria-expanded="false" aria-controls="env-popover">
+        <span id="status-dot" class="status-dot loading" aria-hidden="true"></span>
+        <span id="status-summary">Checking...</span>
+      </button>
+
+      <!-- Diagnostics Drawer Toggle Button -->
+      <button id="btn-diagnostics" class="btn-diagnostics" type="button" aria-label="Open diagnostics drawer" aria-controls="drawer">
+        <span id="diag-error-badge" class="badge-err" aria-hidden="true"></span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+        </svg>
+        <span>Diagnostics</span>
       </button>
     </div>
-  </section>
+  </header>
 
-  <!-- Live Diagnostics Panel -->
-  <section class="diagnostics-panel" id="diagnostics-panel" style="display: none;">
-    <div class="panel-header">
-      <div class="panel-title">⚡ Live Diagnostics</div>
-      <div id="diag-job-id" style="font-size: 0.8rem; color: var(--text-muted); font-family: monospace;"></div>
-    </div>
-    <div class="stages-list">
-      <div class="stage-row" id="stage-input_received">
-        <div class="stage-status-icon">○</div>
-        <div class="stage-name">1. Input Received</div>
-        <div><span class="stage-badge pending">pending</span></div>
-        <div class="stage-meta">-</div>
-      </div>
-      <div class="stage-row" id="stage-audio_conversion">
-        <div class="stage-status-icon">○</div>
-        <div class="stage-name">2. Audio Conversion</div>
-        <div><span class="stage-badge pending">pending</span></div>
-        <div class="stage-meta">-</div>
-      </div>
-      <div class="stage-row" id="stage-transcription">
-        <div class="stage-status-icon">○</div>
-        <div class="stage-name">3. Transcription</div>
-        <div><span class="stage-badge pending">pending</span></div>
-        <div class="stage-meta">-</div>
-      </div>
-      <div class="stage-row" id="stage-ticket_extraction">
-        <div class="stage-status-icon">○</div>
-        <div class="stage-name">4. Ticket Extraction</div>
-        <div><span class="stage-badge pending">pending</span></div>
-        <div class="stage-meta">-</div>
-      </div>
-      <div class="stage-row" id="stage-validation">
-        <div class="stage-status-icon">○</div>
-        <div class="stage-name">5. Validation</div>
-        <div><span class="stage-badge pending">pending</span></div>
-        <div class="stage-meta">-</div>
-      </div>
-      <div class="stage-row" id="stage-done">
-        <div class="stage-status-icon">○</div>
-        <div class="stage-name">6. Completed</div>
-        <div><span class="stage-badge pending">pending</span></div>
-        <div class="stage-meta">-</div>
+  <!-- Environment Popover -->
+  <aside id="env-popover" class="popover" role="dialog" aria-label="Environment Details" aria-modal="false">
+    <div class="popover-header">System Environment</div>
+    <div class="popover-grid">
+      <span class="popover-label">Backend:</span>
+      <span id="env-backend" class="popover-val">—</span>
+
+      <span class="popover-label">GPU:</span>
+      <span id="env-gpu" class="popover-val">—</span>
+
+      <span class="popover-label">Whisper:</span>
+      <span id="env-whisper" class="popover-val">—</span>
+
+      <span class="popover-label">LLM:</span>
+      <span id="env-llm" class="popover-val">—</span>
+
+      <div id="env-vram-row" style="display: contents;">
+        <span class="popover-label">VRAM:</span>
+        <span id="env-vram" class="popover-val">—</span>
       </div>
     </div>
-  </section>
+  </aside>
 
-  <!-- Transcript View (Collapsible) -->
-  <details class="transcript-box" id="transcript-box" style="display: none;">
-    <summary>📄 Transcribed Text</summary>
-    <div class="transcript-content" id="transcript-content"></div>
-  </details>
+  <!-- Main Stage (Single Focused Workspace) -->
+  <main class="main-stage">
 
-  <!-- Output Tickets Section -->
-  <section id="tickets-section" style="display: none;">
-    <div class="tickets-header">
-      <h2 style="font-size: 1.15rem; font-weight: 600;">Draft Tickets (<span id="ticket-count">0</span>)</h2>
-      <button class="btn-small" onclick="copyAllTickets()">Copy All Markdown</button>
+    <!-- Inline Error Card -->
+    <div id="error-card" class="error-card" role="alert" aria-live="assertive">
+      <div class="error-card-header">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <span>Error in <span id="error-card-stage">Pipeline</span></span>
+      </div>
+      <div id="error-card-msg" class="error-card-msg">An error occurred during execution.</div>
+      <pre id="error-card-raw" class="error-card-raw" style="display: none;"></pre>
+      <button class="btn-try-again" type="button" onclick="switchView('start'); clearErrorCard();">Try again</button>
     </div>
-    <div class="ticket-grid" id="ticket-grid"></div>
-  </section>
 
-  <!-- Raw Log Panel -->
-  <details class="logs-panel">
-    <summary>
-      <span>📜 Raw Diagnostics Log</span>
-      <button class="btn-small" type="button" onclick="downloadLog(event)">Download log</button>
-    </summary>
-    <pre class="logs-pre" id="raw-logs"></pre>
-  </details>
+    <!-- ── State 1: Start State ("New meeting") ── -->
+    <section id="state-start" class="state-view active" aria-labelledby="start-card-title">
+      <div class="input-card">
+        <h2 id="start-card-title" class="sr-only" style="display: none;">Input Meeting Content</h2>
+        
+        <!-- Input Tabs -->
+        <div class="input-tabs" role="tablist" aria-label="Input mode selection">
+          <button id="tab-audio-btn" class="tab-btn active" role="tab" aria-selected="true" aria-controls="pane-audio" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+              <line x1="12" y1="19" x2="12" y2="23"></line>
+              <line x1="8" y1="23" x2="16" y2="23"></line>
+            </svg>
+            <span>Audio File</span>
+          </button>
+          <button id="tab-notes-btn" class="tab-btn" role="tab" aria-selected="false" aria-controls="pane-notes" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+            <span>Notes / Text</span>
+          </button>
+        </div>
 
-  <script>
-    let activeTab = 'audio';
-    let currentJobId = null;
-    let sseSource = null;
-    let rawLogLines = [];
-    let currentTickets = [];
+        <!-- Audio Pane -->
+        <div id="pane-audio" class="tab-pane active" role="tabpanel" aria-labelledby="tab-audio-btn">
+          <input type="file" id="file-input" accept="audio/*,.wav,.mp3,.m4a,.ogg,.flac,.webm" style="display: none;" aria-label="Upload audio recording">
+          
+          <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Drag and drop audio file here or click to browse">
+            <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <div class="dropzone-title">Drop your meeting recording here</div>
+            <div class="dropzone-sub">or click to browse from your computer</div>
+            <div class="dropzone-formats">Supports WAV, MP3, M4A, OGG, FLAC, WEBM</div>
+          </div>
 
-    // ── Tab Switching ──
-    function switchTab(tab) {
-      activeTab = tab;
-      document.getElementById('tab-audio-btn').classList.toggle('active', tab === 'audio');
-      document.getElementById('tab-text-btn').classList.toggle('active', tab === 'text');
-      document.getElementById('pane-audio').classList.toggle('active', tab === 'audio');
-      document.getElementById('pane-text').classList.toggle('active', tab === 'text');
-    }
+          <div id="file-selected-box" class="file-selected-box" style="display: none;">
+            <div class="file-meta">
+              <svg class="file-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polygon points="10 8 16 12 10 16 10 8"></polygon>
+              </svg>
+              <div>
+                <div id="file-name" class="file-name">recording.mp3</div>
+                <div id="file-size" class="file-size">0 MB</div>
+              </div>
+            </div>
+            <button id="btn-remove-file" class="btn-remove-file" type="button" aria-label="Remove selected audio file">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
 
-    // ── Logging helper ──
-    function logMessage(msg) {
-      const time = new Date().toLocaleTimeString();
-      const line = `[${time}] ${msg}`;
-      rawLogLines.push(line);
-      const pre = document.getElementById('raw-logs');
-      pre.textContent = rawLogLines.join('\n');
-      pre.scrollTop = pre.scrollHeight;
-    }
+        <!-- Notes Pane -->
+        <div id="pane-notes" class="tab-pane" role="tabpanel" aria-labelledby="tab-notes-btn">
+          <div class="textarea-wrapper">
+            <textarea id="notes-input" class="notes-input" placeholder="Paste your meeting notes, raw transcript, or discussion summary here..." aria-label="Meeting notes text input"></textarea>
+            <div class="textarea-hint">Press Ctrl+Enter or Cmd+Enter to generate</div>
+          </div>
+        </div>
 
-    function downloadLog(e) {
-      e.stopPropagation();
-      const blob = new Blob([rawLogLines.join('\n')], { type: 'text/plain' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `meeting-tickets-log-${Date.now()}.txt`;
-      a.click();
-    }
+        <!-- Bottom Action Bar -->
+        <div class="start-actions">
+          <span id="start-status-text" class="start-status-text">Ready to extract actionable tickets</span>
+          <button id="btn-generate" class="btn-primary" type="button" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span>Generate tickets</span>
+          </button>
+        </div>
+      </div>
+    </section>
 
-    function showError(msg) {
-      const el = document.getElementById('error-banner');
-      if (!msg) {
-        el.style.display = 'none';
-        el.textContent = '';
-      } else {
-        el.style.display = 'block';
-        el.textContent = msg;
-        logMessage(`ERROR: ${msg}`);
-      }
-    }
+    <!-- ── State 2: Processing State (Stepper) ── -->
+    <section id="state-processing" class="state-view" aria-labelledby="proc-title">
+      <div class="processing-card">
+        <h2 id="proc-title" class="processing-title">Processing Meeting</h2>
+        <p class="processing-sub">Running local AI pipeline directly on your GPU</p>
 
-    // ── Environment & Health Check ──
-    async function updateHealth() {
-      try {
-        const r = await fetch('/api/health');
-        if (!r.ok) throw new Error(`Health status ${r.status}`);
-        const data = await r.json();
-
-        document.getElementById('env-backend').textContent = data.backend.toUpperCase();
-        document.getElementById('env-gpu').textContent = data.gpu_name;
-
-        // Whisper status
-        const ws = data.whisper_server;
-        const wDot = document.getElementById('dot-whisper');
-        wDot.className = `status-dot ${ws.status}`;
-        document.getElementById('env-whisper').textContent =
-          `${ws.status} (${ws.model_id || 'none'}${ws.load_time_s ? ' in ' + ws.load_time_s + 's' : ''})`;
-
-        // LLM status
-        const ls = data.llama_server;
-        const lDot = document.getElementById('dot-llm');
-        lDot.className = `status-dot ${ls.status}`;
-        document.getElementById('env-llm').textContent =
-          `${ls.status} (${ls.model_id || 'none'}${ls.load_time_s ? ' in ' + ls.load_time_s + 's' : ''})`;
-
-        // VRAM
-        if (data.vram) {
-          document.getElementById('env-vram-item').style.display = 'flex';
-          document.getElementById('env-vram').textContent = `${data.vram.used_mb}MB / ${data.vram.total_mb}MB`;
-        }
-      } catch (err) {
-        document.getElementById('env-whisper').textContent = 'error';
-        document.getElementById('env-llm').textContent = 'error';
-      }
-    }
-
-    // ── Load Model Registry ──
-    async function loadModels() {
-      try {
-        const r = await fetch('/api/models');
-        const data = await r.json();
-
-        const wSelect = document.getElementById('whisper-select');
-        const lSelect = document.getElementById('llm-select');
-
-        wSelect.innerHTML = '';
-        lSelect.innerHTML = '';
-
-        data.models.forEach(m => {
-          const opt = document.createElement('option');
-          opt.value = m.id;
-          opt.textContent = m.available ? m.name : `${m.name} (not found: ${m.path})`;
-          opt.disabled = !m.available;
-
-          if (m.type === 'whisper') {
-            if (m.id === data.loaded_whisper) opt.selected = true;
-            wSelect.appendChild(opt);
-          } else if (m.type === 'llm') {
-            if (m.id === data.loaded_llm) opt.selected = true;
-            lSelect.appendChild(opt);
-          }
-        });
-      } catch (e) {
-        logMessage(`Failed to load models list: ${e.message}`);
-      }
-    }
-
-    // ── Handle Model Switch ──
-    async function handleModelChange(type) {
-      const select = document.getElementById(`${type}-select`);
-      const modelId = select.value;
-      const indicator = document.getElementById('switching-indicator');
-      const genBtn = document.getElementById('btn-generate');
-
-      showError(null);
-      indicator.style.display = 'inline-block';
-      genBtn.disabled = true;
-      logMessage(`Switching ${type} model to ${modelId}...`);
-
-      try {
-        const r = await fetch('/api/models/select', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model_id: modelId })
-        });
-        const res = await r.json();
-        if (!r.ok) throw new Error(res.detail || 'Model switch failed');
-        logMessage(`${type} model switched successfully in ${res.load_time_s || 0}s`);
-      } catch (err) {
-        showError(`Model switch error: ${err.message}`);
-        await loadModels(); // Revert selection
-      } finally {
-        indicator.style.display = 'none';
-        genBtn.disabled = false;
-        await updateHealth();
-      }
-    }
-
-    // ── Diagnostics Stage Updates ──
-    function resetStages() {
-      const stages = ['input_received', 'audio_conversion', 'transcription', 'ticket_extraction', 'validation', 'done'];
-      stages.forEach(s => {
-        const row = document.getElementById(`stage-${s}`);
-        if (row) {
-          row.querySelector('.stage-status-icon').textContent = '○';
-          const badge = row.querySelector('.stage-badge');
-          badge.className = 'stage-badge pending';
-          badge.textContent = 'pending';
-          row.querySelector('.stage-meta').textContent = '-';
-        }
-      });
-      document.getElementById('transcript-box').style.display = 'none';
-      document.getElementById('tickets-section').style.display = 'none';
-      document.getElementById('ticket-grid').innerHTML = '';
-      currentTickets = [];
-    }
-
-    function updateStageUI(evt) {
-      const stage = evt.stage;
-      const row = document.getElementById(`stage-${stage}`);
-      if (!row) return;
-
-      const icon = row.querySelector('.stage-status-icon');
-      const badge = row.querySelector('.stage-badge');
-      const meta = row.querySelector('.stage-meta');
-
-      badge.className = `stage-badge ${evt.status}`;
-      badge.textContent = evt.status;
-
-      if (evt.status === 'running') {
-        icon.textContent = '●';
-        icon.style.color = 'var(--warning)';
-      } else if (evt.status === 'done') {
-        icon.textContent = '✓';
-        icon.style.color = 'var(--success)';
-      } else if (evt.status === 'failed') {
-        icon.textContent = '✕';
-        icon.style.color = 'var(--danger)';
-      } else if (evt.status === 'skipped') {
-        icon.textContent = '-';
-        icon.style.color = 'var(--text-muted)';
-      }
-
-      // Metadata details
-      let details = [];
-      if (evt.elapsed_s != null) details.push(`${evt.elapsed_s}s`);
-      if (evt.input_type) details.push(`Type: ${evt.input_type}`);
-      if (evt.filename) details.push(`${evt.filename} (${evt.file_size_kb || 0} KB)`);
-      if (evt.text_length != null) details.push(`${evt.text_length} chars`);
-      if (evt.duration_s) details.push(`Audio duration: ${evt.duration_s}s`);
-      if (evt.speed) details.push(`${evt.speed}`);
-      if (evt.word_count != null) details.push(`${evt.word_count} words`);
-      if (evt.chunk) details.push(evt.chunk);
-      if (evt.tokens_per_second) details.push(`${evt.tokens_per_second} tok/s`);
-      if (evt.completion_tokens) details.push(`${evt.completion_tokens} tokens`);
-      if (evt.ticket_count != null) details.push(`${evt.ticket_count} tickets verified`);
-      if (evt.total_elapsed_s != null) details.push(`Total time: ${evt.total_elapsed_s}s`);
-      if (evt.error) details.push(`Error: ${evt.error}`);
-
-      if (details.length > 0) {
-        meta.textContent = details.join(' • ');
-      }
-    }
-
-    // ── Render Ticket Cards ──
-    function renderTickets(tickets) {
-      currentTickets = tickets;
-      const grid = document.getElementById('ticket-grid');
-      grid.innerHTML = '';
-      document.getElementById('ticket-count').textContent = tickets.length;
-      document.getElementById('tickets-section').style.display = 'block';
-
-      tickets.forEach((t, idx) => {
-        const card = document.createElement('div');
-        const pClass = (t.priority || 'medium').toLowerCase();
-        card.className = `ticket-card ${pClass}`;
-
-        const acListHtml = (t.acceptance_criteria || [])
-          .map(ac => `<li>${ac}</li>`)
-          .join('');
-
-        card.innerHTML = `
-          <div class="ticket-card-header">
-            <div class="ticket-title">${escapeHtml(t.title)}</div>
-            <div class="ticket-badges">
-              <span class="badge p-${pClass}">${pClass.toUpperCase()}</span>
-              ${t.assignee ? `<span class="badge assignee">@${escapeHtml(t.assignee)}</span>` : ''}
+        <div class="stepper" role="list">
+          
+          <!-- Step 1: Input Received -->
+          <div id="step-input_received" class="step-item" role="listitem">
+            <div class="step-icon-col">
+              <div class="step-circle" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="6"/></svg>
+              </div>
+            </div>
+            <div class="step-content">
+              <div class="step-head">
+                <span class="step-name">Input received</span>
+                <span class="step-time"></span>
+              </div>
+              <div class="step-detail">Pending</div>
             </div>
           </div>
-          <div class="ticket-desc">${escapeHtml(t.description)}</div>
-          ${acListHtml ? `
-            <div>
-              <div class="ticket-ac-title">Acceptance Criteria</div>
-              <ul class="ticket-ac-list">${acListHtml}</ul>
+
+          <!-- Step 2: Audio Conversion -->
+          <div id="step-audio_conversion" class="step-item" role="listitem">
+            <div class="step-icon-col">
+              <div class="step-circle" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="6"/></svg>
+              </div>
             </div>
-          ` : ''}
-          <button class="btn-copy" onclick="copyTicket(${idx}, this)">
-            <span>Copy Markdown</span>
+            <div class="step-content">
+              <div class="step-head">
+                <span class="step-name">Audio conversion</span>
+                <span class="step-time"></span>
+              </div>
+              <div class="step-detail">Pending</div>
+            </div>
+          </div>
+
+          <!-- Step 3: Transcription -->
+          <div id="step-transcription" class="step-item" role="listitem">
+            <div class="step-icon-col">
+              <div class="step-circle" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="6"/></svg>
+              </div>
+            </div>
+            <div class="step-content">
+              <div class="step-head">
+                <span class="step-name">Transcription (Whisper)</span>
+                <span class="step-time"></span>
+              </div>
+              <div class="step-detail">Pending</div>
+            </div>
+          </div>
+
+          <!-- Step 4: Ticket Extraction -->
+          <div id="step-ticket_extraction" class="step-item" role="listitem">
+            <div class="step-icon-col">
+              <div class="step-circle" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="6"/></svg>
+              </div>
+            </div>
+            <div class="step-content">
+              <div class="step-head">
+                <span class="step-name">Ticket extraction (LLM)</span>
+                <span class="step-time"></span>
+              </div>
+              <div class="step-detail">Pending</div>
+            </div>
+          </div>
+
+          <!-- Step 5: Validation -->
+          <div id="step-validation" class="step-item" role="listitem">
+            <div class="step-icon-col">
+              <div class="step-circle" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="6"/></svg>
+              </div>
+            </div>
+            <div class="step-content">
+              <div class="step-head">
+                <span class="step-name">Validation & parsing</span>
+                <span class="step-time"></span>
+              </div>
+              <div class="step-detail">Pending</div>
+            </div>
+          </div>
+
+          <!-- Step 6: Done -->
+          <div id="step-done" class="step-item" role="listitem">
+            <div class="step-icon-col">
+              <div class="step-circle" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="6"/></svg>
+              </div>
+            </div>
+            <div class="step-content">
+              <div class="step-head">
+                <span class="step-name">Finished</span>
+                <span class="step-time"></span>
+              </div>
+              <div class="step-detail">Pending</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ── State 3: Results State ── -->
+    <section id="state-results" class="state-view" aria-labelledby="results-tab-tickets-btn">
+      <div class="results-nav">
+        <!-- Switch between Tickets & Transcript -->
+        <div class="results-tabs" role="tablist" aria-label="Results view switch">
+          <button id="results-tab-tickets-btn" class="results-tab-btn active" role="tab" aria-selected="true" aria-controls="results-tickets-list" type="button">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+            <span>Tickets</span>
+            <span id="tickets-badge-count" class="results-tab-count">0</span>
           </button>
-        `;
-        grid.appendChild(card);
-      });
-    }
+          <button id="results-tab-transcript-btn" class="results-tab-btn" role="tab" aria-selected="false" aria-controls="results-transcript-card" type="button">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+            <span>Transcript</span>
+          </button>
+        </div>
 
-    function formatTicketMarkdown(t) {
-      let md = `### ${t.title}\n\n`;
-      md += `**Priority:** ${t.priority || 'medium'}  \n`;
-      if (t.assignee) md += `**Assignee:** ${t.assignee}  \n`;
-      md += `\n${t.description}\n\n`;
-      if (t.acceptance_criteria && t.acceptance_criteria.length > 0) {
-        md += `**Acceptance Criteria:**\n`;
-        t.acceptance_criteria.forEach(ac => {
-          md += `- ${ac}\n`;
-        });
-      }
-      return md.trim();
-    }
+        <div class="results-actions">
+          <button class="btn-secondary" type="button" onclick="copyAllTickets()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span>Copy all (Markdown)</span>
+          </button>
+        </div>
+      </div>
 
-    async function copyTicket(index, btn) {
-      const ticket = currentTickets[index];
-      if (!ticket) return;
-      const md = formatTicketMarkdown(ticket);
-      await navigator.clipboard.writeText(md);
-      btn.classList.add('copied');
-      btn.innerHTML = '<span>✓ Copied</span>';
-      setTimeout(() => {
-        btn.classList.remove('copied');
-        btn.innerHTML = '<span>Copy Markdown</span>';
-      }, 2000);
-    }
+      <!-- Tickets Card List -->
+      <div id="results-tickets-list" class="tickets-list" role="tabpanel" aria-labelledby="results-tab-tickets-btn"></div>
 
-    async function copyAllTickets() {
-      if (!currentTickets.length) return;
-      const allMd = currentTickets.map(formatTicketMarkdown).join('\n\n---\n\n');
-      await navigator.clipboard.writeText(allMd);
-      logMessage('Copied all tickets to clipboard');
-      alert('All tickets copied to clipboard as Markdown!');
-    }
+      <!-- Raw Transcript View Card -->
+      <div id="results-transcript-card" class="transcript-card" role="tabpanel" aria-labelledby="results-tab-transcript-btn" style="display: none;"></div>
 
-    function escapeHtml(str) {
-      if (!str) return '';
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
+      <!-- Completion Timing Summary Bar -->
+      <div id="completion-summary-bar" class="completion-summary-bar" role="button" tabindex="0" title="Click to open diagnostics logs" aria-label="View completion diagnostics">
+        <span id="summary-timing-text" class="summary-timing-text">Done in 0s</span>
+        <span class="summary-drawer-link">
+          <span>View logs</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </span>
+      </div>
+    </section>
 
-    // ── Start Job Generation ──
-    async function startGeneration() {
-      showError(null);
-      const btn = document.getElementById('btn-generate');
-      const formData = new FormData();
+  </main>
 
-      if (activeTab === 'audio') {
-        const fileInput = document.getElementById('audio-file');
-        if (!fileInput.files || fileInput.files.length === 0) {
-          showError('Please choose an audio file to upload.');
-          return;
-        }
-        formData.append('audio', fileInput.files[0]);
-      } else {
-        const textVal = document.getElementById('notes-text').value.trim();
-        if (!textVal) {
-          showError('Please enter or paste meeting notes.');
-          return;
-        }
-        formData.append('text', textVal);
-      }
+  <!-- ── Diagnostics Slide-over Drawer ── -->
+  <div id="drawer-backdrop" class="drawer-backdrop" aria-hidden="true"></div>
+  <aside id="drawer" class="drawer" role="dialog" aria-label="Diagnostics and Logs" aria-modal="true">
+    <div class="drawer-header">
+      <span class="drawer-title">Execution Diagnostics</span>
+      <button id="drawer-close-btn" class="btn-close-drawer" type="button" aria-label="Close diagnostics drawer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
 
-      resetStages();
-      document.getElementById('diagnostics-panel').style.display = 'block';
-      btn.disabled = true;
+    <div class="drawer-body">
+      <div class="drawer-section-title">Raw Log &amp; Timing Events</div>
+      <pre id="drawer-logs" class="drawer-pre" tabindex="0">Waiting for activity...</pre>
+    </div>
 
-      try {
-        logMessage('Creating new ticket generation job...');
-        const r = await fetch('/api/jobs', { method: 'POST', body: formData });
-        const res = await r.json();
-        if (!r.ok) throw new Error(res.detail || 'Failed to create job');
+    <div class="drawer-footer">
+      <button id="btn-download-log" class="btn-secondary" type="button">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span>Download log</span>
+      </button>
+    </div>
+  </aside>
 
-        currentJobId = res.job_id;
-        document.getElementById('diag-job-id').textContent = `Job ID: ${currentJobId}`;
-        logMessage(`Job started: ${currentJobId}`);
-
-        // Connect SSE
-        listenToJobEvents(currentJobId);
-      } catch (err) {
-        showError(`Job creation failed: ${err.message}`);
-        btn.disabled = false;
-      }
-    }
-
-    function listenToJobEvents(jobId) {
-      if (sseSource) sseSource.close();
-
-      sseSource = new EventSource(`/api/jobs/${jobId}/events`);
-
-      sseSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          logMessage(`[${data.stage}] ${data.status} ${JSON.stringify(data)}`);
-          updateStageUI(data);
-
-          // Handle Done
-          if (data.stage === 'done') {
-            if (data.status === 'done') {
-              if (data.transcript) {
-                document.getElementById('transcript-content').textContent = data.transcript;
-                document.getElementById('transcript-box').style.display = 'block';
-              }
-              if (data.tickets) {
-                renderTickets(data.tickets);
-              }
-            } else if (data.status === 'failed') {
-              showError(`Generation failed: ${data.error || 'Unknown error'}`);
-            }
-            document.getElementById('btn-generate').disabled = false;
-            sseSource.close();
-          }
-        } catch (e) {
-          console.error(e);
-        }
-      };
-
-      sseSource.onerror = (e) => {
-        logMessage('SSE connection closed or lost.');
-        document.getElementById('btn-generate').disabled = false;
-        sseSource.close();
-      };
-    }
-
-    // Initialize
-    updateHealth();
-    loadModels();
-    setInterval(updateHealth, 5000);
-  </script>
+  <script src="/static/app.js"></script>
 </body>
 </html>
