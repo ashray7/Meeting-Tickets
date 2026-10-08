@@ -42,6 +42,22 @@
           </svg>
           <span class="nav-label">Projects</span>
         </a>
+        <a href="#/departments" id="nav-departments" class="nav-item" title="Departments">
+          <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+          </svg>
+          <span class="nav-label">Departments</span>
+        </a>
+        <a href="#/team" id="nav-team" class="nav-item" title="Team members">
+          <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+          <span class="nav-label">Team members</span>
+        </a>
       </nav>
     </aside>
 
@@ -615,6 +631,93 @@
         </main>
       </div> <!-- /view-meeting-detail -->
 
+      <!-- 4. Departments List View -->
+      <div id="view-departments" class="app-page-view" style="display: none;">
+        <main class="main-stage">
+          <div class="page-header">
+            <div>
+              <h2 class="page-heading">Departments</h2>
+              <p class="page-subheading">Manage functional departments and member assignments.</p>
+            </div>
+            <button id="btn-create-department" class="btn-primary" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span>New department</span>
+            </button>
+          </div>
+
+          <!-- Empty State -->
+          <div id="departments-empty-state" class="empty-state-card" style="display: none;">
+            <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+            </svg>
+            <h3 class="empty-state-title">No departments yet</h3>
+            <p class="empty-state-desc">Create your first department to organize team members.</p>
+            <div style="margin-top: 1.25rem;">
+              <button id="btn-create-department-empty" class="btn-primary" type="button">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>New department</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Departments List Container -->
+          <div id="departments-list-container" class="departments-grid"></div>
+        </main>
+      </div> <!-- /view-departments -->
+
+      <!-- 5. Team Members List View -->
+      <div id="view-team" class="app-page-view" style="display: none;">
+        <main class="main-stage">
+          <div class="page-header">
+            <div>
+              <h2 class="page-heading">Team members</h2>
+              <p class="page-subheading">Manage team members for ticket assignment.</p>
+            </div>
+            <button id="btn-create-team-member" class="btn-primary" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span>New member</span>
+            </button>
+          </div>
+
+          <!-- Empty State: No Departments -->
+          <div id="team-empty-no-depts" class="empty-state-card" style="display: none;">
+            <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+            </svg>
+            <h3 class="empty-state-title">No departments yet</h3>
+            <p class="empty-state-desc">You need at least one department before adding team members.</p>
+            <div style="margin-top: 1.25rem;">
+              <a href="#/departments" class="btn-primary" style="display: inline-flex; align-items: center; gap: 0.4rem; text-decoration: none;">
+                <span>Go to Departments</span>
+              </a>
+            </div>
+          </div>
+
+          <!-- Empty State: Has Departments but No Members -->
+          <div id="team-empty-state" class="empty-state-card" style="display: none;">
+            <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+            <h3 class="empty-state-title">No team members yet</h3>
+            <p class="empty-state-desc">Add your first team member to assign them to tickets.</p>
+            <div style="margin-top: 1.25rem;">
+              <button id="btn-create-member-empty" class="btn-primary" type="button">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>New member</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Team Members List Container -->
+          <div id="team-members-list-container" class="team-members-list"></div>
+        </main>
+      </div> <!-- /view-team -->
+
     </div> <!-- /main-content-wrapper -->
   </div> <!-- /app-layout -->
 
@@ -673,6 +776,120 @@
     </div>
   </dialog>
 
+  <!-- ── Department Create / Edit Dialog ── -->
+  <dialog id="department-dialog" class="app-dialog" aria-labelledby="dept-dialog-title">
+    <form id="department-dialog-form" method="dialog">
+      <div class="dialog-header">
+        <h3 id="dept-dialog-title" class="dialog-title">New department</h3>
+        <button id="btn-close-dept-dialog" class="dialog-close-btn" type="button" aria-label="Close dialog">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div id="dept-dialog-error" class="dialog-error-msg" style="display: none;" role="alert"></div>
+        <div class="form-field">
+          <label for="dept-name-input" class="field-label">Department name <span class="required">*</span></label>
+          <input type="text" id="dept-name-input" class="text-input" maxlength="60" placeholder="e.g. Mobile Dev" required autocomplete="off">
+          <div class="field-hint">Max 60 characters, unique ignoring case</div>
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <button id="btn-cancel-dept" class="btn-secondary" type="button">Cancel</button>
+        <button id="btn-save-dept" class="btn-primary" type="submit">
+          <span id="btn-save-dept-text">Save department</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ── Delete Department Dialog ── -->
+  <dialog id="delete-department-dialog" class="app-dialog" aria-labelledby="delete-dept-dialog-title">
+    <div class="dialog-header">
+      <h3 id="delete-dept-dialog-title" class="dialog-title">Delete department</h3>
+      <button id="btn-close-delete-dept-dialog" class="dialog-close-btn" type="button" aria-label="Close dialog">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="dialog-body">
+      <div id="delete-dept-blocked-box" style="display: none;">
+        <p class="dialog-warning-text" style="color: var(--danger);">
+          Cannot delete department <strong id="delete-dept-blocked-name">Department</strong>.
+        </p>
+        <p class="dialog-warning-sub">
+          Move or remove its <span id="delete-dept-member-count">0</span> members first.
+        </p>
+      </div>
+      <div id="delete-dept-confirm-box">
+        <p class="dialog-warning-text">
+          Are you sure you want to delete <strong id="delete-dept-name">Department</strong>?
+        </p>
+        <p class="dialog-warning-sub">
+          This department has no members and will be permanently removed.
+        </p>
+      </div>
+    </div>
+    <div class="dialog-footer">
+      <button id="btn-cancel-delete-dept" class="btn-secondary" type="button">Cancel</button>
+      <button id="btn-confirm-delete-dept" class="btn-danger-confirm" type="button">
+        <span id="btn-confirm-delete-dept-text">Delete department</span>
+      </button>
+    </div>
+  </dialog>
+
+  <!-- ── Team Member Create / Edit Dialog ── -->
+  <dialog id="team-member-dialog" class="app-dialog" aria-labelledby="team-member-dialog-title">
+    <form id="team-member-dialog-form" method="dialog">
+      <div class="dialog-header">
+        <h3 id="team-member-dialog-title" class="dialog-title">New team member</h3>
+        <button id="btn-close-team-member-dialog" class="dialog-close-btn" type="button" aria-label="Close dialog">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div id="team-member-dialog-error" class="dialog-error-msg" style="display: none;" role="alert"></div>
+        <div class="form-field">
+          <label for="team-member-name-input" class="field-label">Member name <span class="required">*</span></label>
+          <input type="text" id="team-member-name-input" class="text-input" maxlength="100" placeholder="e.g. Alice Walker" required autocomplete="off">
+          <div class="field-hint">Max 100 characters</div>
+        </div>
+        <div class="form-field">
+          <label for="team-member-dept-select" class="field-label">Department <span class="required">*</span></label>
+          <select id="team-member-dept-select" class="text-input" required>
+            <option value="" disabled selected>Select a department...</option>
+          </select>
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <button id="btn-cancel-team-member" class="btn-secondary" type="button">Cancel</button>
+        <button id="btn-save-team-member" class="btn-primary" type="submit">
+          <span id="btn-save-team-member-text">Save member</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ── Delete Team Member Dialog ── -->
+  <dialog id="delete-team-member-dialog" class="app-dialog" aria-labelledby="delete-team-member-dialog-title">
+    <div class="dialog-header">
+      <h3 id="delete-team-member-dialog-title" class="dialog-title">Delete team member</h3>
+      <button id="btn-close-delete-member-dialog" class="dialog-close-btn" type="button" aria-label="Close dialog">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="dialog-body">
+      <p class="dialog-warning-text">
+        Are you sure you want to delete <strong id="delete-member-name">Member</strong>?
+      </p>
+      <p id="delete-member-tickets-warning" class="dialog-warning-sub"></p>
+    </div>
+    <div class="dialog-footer">
+      <button id="btn-cancel-delete-member" class="btn-secondary" type="button">Cancel</button>
+      <button id="btn-confirm-delete-member" class="btn-danger-confirm" type="button">
+        <span id="btn-confirm-delete-member-text">Delete member</span>
+      </button>
+    </div>
+  </dialog>
+
   <!-- ── Diagnostics Slide-over Drawer ── -->
   <div id="drawer-backdrop" class="drawer-backdrop" aria-hidden="true"></div>
   <aside id="drawer" class="drawer" role="dialog" aria-label="Diagnostics and Logs" aria-modal="true">
@@ -702,6 +919,9 @@
       </button>
     </div>
   </aside>
+
+  <!-- Polite live region for ticket status accessibility announcements -->
+  <div id="ticket-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
   <script src="/static/app.js"></script>
 </body>

@@ -30,6 +30,12 @@ const state = {
   activeMeetingTab: 'tickets',
   currentSavedMeeting: null,
   transcribeAudioUrl: null,
+  departments: [],
+  teamMembers: [],
+  editingDepartment: null,
+  deletingDepartment: null,
+  editingTeamMember: null,
+  deletingTeamMember: null,
 };
 
 // ── DOM Elements ──
@@ -108,12 +114,16 @@ function initElements() {
   // Sidebar & Layout Navigation
   els.navTranscribe = document.getElementById('nav-transcribe');
   els.navProjects = document.getElementById('nav-projects');
+  els.navDepartments = document.getElementById('nav-departments');
+  els.navTeam = document.getElementById('nav-team');
   els.topBarTitle = document.getElementById('top-bar-title');
   els.topBarTranscribeControls = document.getElementById('top-bar-transcribe-controls');
   els.viewTranscribe = document.getElementById('view-transcribe');
   els.viewProjects = document.getElementById('view-projects');
   els.viewProjectDetail = document.getElementById('view-project-detail');
   els.viewMeetingDetail = document.getElementById('view-meeting-detail');
+  els.viewDepartments = document.getElementById('view-departments');
+  els.viewTeam = document.getElementById('view-team');
 
   // Projects View Elements
   els.btnCreateProject = document.getElementById('btn-create-project');
@@ -169,6 +179,63 @@ function initElements() {
   els.btnConfirmDeleteText = document.getElementById('btn-confirm-delete-text');
   els.deleteProjectName = document.getElementById('delete-project-name');
   els.deleteMeetingsCount = document.getElementById('delete-meetings-count');
+
+  // Departments View Elements
+  els.btnCreateDepartment = document.getElementById('btn-create-department');
+  els.btnCreateDepartmentEmpty = document.getElementById('btn-create-department-empty');
+  els.departmentsEmptyState = document.getElementById('departments-empty-state');
+  els.departmentsListContainer = document.getElementById('departments-list-container');
+
+  // Department Dialog Elements
+  els.departmentDialog = document.getElementById('department-dialog');
+  els.departmentDialogForm = document.getElementById('department-dialog-form');
+  els.deptDialogTitle = document.getElementById('dept-dialog-title');
+  els.deptDialogError = document.getElementById('dept-dialog-error');
+  els.deptNameInput = document.getElementById('dept-name-input');
+  els.btnCloseDeptDialog = document.getElementById('btn-close-dept-dialog');
+  els.btnCancelDept = document.getElementById('btn-cancel-dept');
+  els.btnSaveDept = document.getElementById('btn-save-dept');
+  els.btnSaveDeptText = document.getElementById('btn-save-dept-text');
+
+  // Delete Department Dialog Elements
+  els.deleteDepartmentDialog = document.getElementById('delete-department-dialog');
+  els.btnCloseDeleteDeptDialog = document.getElementById('btn-close-delete-dept-dialog');
+  els.btnCancelDeleteDept = document.getElementById('btn-cancel-delete-dept');
+  els.btnConfirmDeleteDept = document.getElementById('btn-confirm-delete-dept');
+  els.btnConfirmDeleteDeptText = document.getElementById('btn-confirm-delete-dept-text');
+  els.deleteDeptBlockedBox = document.getElementById('delete-dept-blocked-box');
+  els.deleteDeptConfirmBox = document.getElementById('delete-dept-confirm-box');
+  els.deleteDeptBlockedName = document.getElementById('delete-dept-blocked-name');
+  els.deleteDeptName = document.getElementById('delete-dept-name');
+  els.deleteDeptMemberCount = document.getElementById('delete-dept-member-count');
+
+  // Team Members View Elements
+  els.btnCreateTeamMember = document.getElementById('btn-create-team-member');
+  els.btnCreateMemberEmpty = document.getElementById('btn-create-member-empty');
+  els.teamEmptyNoDepts = document.getElementById('team-empty-no-depts');
+  els.teamEmptyState = document.getElementById('team-empty-state');
+  els.teamMembersListContainer = document.getElementById('team-members-list-container');
+
+  // Team Member Dialog Elements
+  els.teamMemberDialog = document.getElementById('team-member-dialog');
+  els.teamMemberDialogForm = document.getElementById('team-member-dialog-form');
+  els.teamMemberDialogTitle = document.getElementById('team-member-dialog-title');
+  els.teamMemberDialogError = document.getElementById('team-member-dialog-error');
+  els.teamMemberNameInput = document.getElementById('team-member-name-input');
+  els.teamMemberDeptSelect = document.getElementById('team-member-dept-select');
+  els.btnCloseTeamMemberDialog = document.getElementById('btn-close-team-member-dialog');
+  els.btnCancelTeamMember = document.getElementById('btn-cancel-team-member');
+  els.btnSaveTeamMember = document.getElementById('btn-save-team-member');
+  els.btnSaveTeamMemberText = document.getElementById('btn-save-team-member-text');
+
+  // Delete Team Member Dialog Elements
+  els.deleteTeamMemberDialog = document.getElementById('delete-team-member-dialog');
+  els.btnCloseDeleteMemberDialog = document.getElementById('btn-close-delete-member-dialog');
+  els.btnCancelDeleteMember = document.getElementById('btn-cancel-delete-member');
+  els.btnConfirmDeleteMember = document.getElementById('btn-confirm-delete-member');
+  els.btnConfirmDeleteMemberText = document.getElementById('btn-confirm-delete-member-text');
+  els.deleteMemberName = document.getElementById('delete-member-name');
+  els.deleteMemberTicketsWarning = document.getElementById('delete-member-tickets-warning');
 
   // Transcribe Project Selector Elements
   els.selectProject = document.getElementById('select-project');
@@ -254,12 +321,17 @@ function switchView(viewName) {
 function handleRoute() {
   const hash = window.location.hash || '#/transcribe';
 
-  // Highlight navigation item (Projects remains active for any project sub-route)
   const isProjects = hash.startsWith('#/projects');
-  if (els.navTranscribe) els.navTranscribe.classList.toggle('active', !isProjects);
-  if (els.navProjects) els.navProjects.classList.toggle('active', isProjects);
+  const isDepartments = hash === '#/departments';
+  const isTeam = hash === '#/team';
+  const isTranscribe = !isProjects && !isDepartments && !isTeam && (hash === '' || hash === '#' || hash === '#/transcribe');
 
-  if (isProjects) {
+  if (els.navTranscribe) els.navTranscribe.classList.toggle('active', isTranscribe);
+  if (els.navProjects) els.navProjects.classList.toggle('active', isProjects);
+  if (els.navDepartments) els.navDepartments.classList.toggle('active', isDepartments);
+  if (els.navTeam) els.navTeam.classList.toggle('active', isTeam);
+
+  if (isProjects || isDepartments || isTeam) {
     cleanupTranscribeAudio();
   }
 
@@ -270,15 +342,15 @@ function handleRoute() {
 
   // Top-bar controls (model pills, status, diagnostics) are only shown on Transcribe view
   if (els.topBarTranscribeControls) {
-    els.topBarTranscribeControls.style.display = !isProjects ? 'flex' : 'none';
+    els.topBarTranscribeControls.style.display = isTranscribe ? 'flex' : 'none';
   }
 
   // Hide all page views
-  [els.viewTranscribe, els.viewProjects, els.viewProjectDetail, els.viewMeetingDetail].forEach(v => {
+  [els.viewTranscribe, els.viewProjects, els.viewProjectDetail, els.viewMeetingDetail, els.viewDepartments, els.viewTeam].forEach(v => {
     if (v) v.style.display = 'none';
   });
 
-  if (hash === '' || hash === '#' || hash === '#/transcribe') {
+  if (isTranscribe) {
     if (window.location.hash !== '#/transcribe') {
       window.location.replace('#/transcribe');
       return;
@@ -289,6 +361,14 @@ function handleRoute() {
     if (els.topBarTitle) els.topBarTitle.textContent = 'Projects';
     if (els.viewProjects) els.viewProjects.style.display = 'flex';
     loadProjects();
+  } else if (hash === '#/departments') {
+    if (els.topBarTitle) els.topBarTitle.textContent = 'Departments';
+    if (els.viewDepartments) els.viewDepartments.style.display = 'flex';
+    loadDepartmentsView();
+  } else if (hash === '#/team') {
+    if (els.topBarTitle) els.topBarTitle.textContent = 'Team members';
+    if (els.viewTeam) els.viewTeam.style.display = 'flex';
+    loadTeamMembersView();
   } else if (hash.match(/^#\/projects\/(\d+)$/)) {
     const match = hash.match(/^#\/projects\/(\d+)$/);
     if (els.topBarTitle) els.topBarTitle.textContent = 'Project Detail';
@@ -406,6 +486,11 @@ function renderProjectsList(projects) {
     card.querySelector('.btn-icon-action.delete').addEventListener('click', (e) => {
       e.stopPropagation();
       openDeleteDialog(p);
+    });
+
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.project-card-actions')) return;
+      window.location.hash = `#/projects/${p.id}`;
     });
 
     els.projectsListContainer.appendChild(card);
@@ -610,55 +695,14 @@ function renderSavedMeetingTickets(tickets) {
   els.meetingTicketsList.innerHTML = '';
 
   state.savedMeetingTickets.forEach((t, i) => {
-    const card = document.createElement('div');
-    const p = (t.priority || 'medium').toLowerCase();
-    card.className = `ticket-card ${p}`;
-
-    const acItems = (t.acceptance_criteria || [])
-      .map(ac => `<li class="criteria-item">${escapeHtml(ac)}</li>`)
-      .join('');
-
-    card.innerHTML = `
-      <div class="ticket-header">
-        <h3 class="ticket-title">${escapeHtml(t.title)}</h3>
-        <div class="ticket-tags">
-          <span class="badge p-${p}">${p}</span>
-          ${t.assignee ? `<span class="badge assignee">@${escapeHtml(t.assignee)}</span>` : ''}
-        </div>
-      </div>
-      <div class="ticket-desc">${escapeHtml(t.description)}</div>
-      ${acItems ? `
-        <div class="ticket-criteria">
-          <div class="ticket-criteria-label">Acceptance Criteria</div>
-          <ul class="criteria-list">${acItems}</ul>
-        </div>
-      ` : ''}
-      <div class="ticket-footer">
-        <button class="btn-copy-ticket" type="button">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <span>Copy</span>
-        </button>
-      </div>
-    `;
-
-    const copyBtn = card.querySelector('.btn-copy-ticket');
-    copyBtn.addEventListener('click', () => copySingleSavedTicket(i, copyBtn));
-
+    const card = createTicketCard(t, {
+      context: 'saved',
+      onUpdate: (updatedTicket) => {
+        state.savedMeetingTickets[i] = updatedTicket;
+      }
+    });
     els.meetingTicketsList.appendChild(card);
   });
-}
-
-async function copySingleSavedTicket(index, btn) {
-  const t = state.savedMeetingTickets[index];
-  if (!t) return;
-  const md = formatTicketMd(t);
-  await navigator.clipboard.writeText(md);
-  btn.classList.add('copied');
-  btn.querySelector('span').textContent = 'Copied';
-  setTimeout(() => {
-    btn.classList.remove('copied');
-    btn.querySelector('span').textContent = 'Copy';
-  }, 2000);
 }
 
 async function copyAllSavedTickets() {
@@ -798,6 +842,459 @@ async function handleConfirmDelete() {
   } finally {
     els.btnConfirmDelete.disabled = false;
     els.btnConfirmDeleteText.textContent = 'Delete project';
+  }
+}
+
+// ── Departments View & Management ──
+async function loadDepartmentsView() {
+  try {
+    const res = await fetch('/api/departments');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const departments = await res.json();
+    state.departments = departments;
+    renderDepartmentsList(departments);
+  } catch (err) {
+    appendLog(`Failed to load departments: ${err.message}`);
+  }
+}
+
+function renderDepartmentsList(departments) {
+  if (!els.departmentsListContainer || !els.departmentsEmptyState) return;
+
+  if (!departments || departments.length === 0) {
+    els.departmentsEmptyState.style.display = 'block';
+    els.departmentsListContainer.style.display = 'none';
+    els.departmentsListContainer.innerHTML = '';
+    return;
+  }
+
+  els.departmentsEmptyState.style.display = 'none';
+  els.departmentsListContainer.style.display = 'flex';
+  els.departmentsListContainer.innerHTML = '';
+
+  departments.forEach(dept => {
+    const card = document.createElement('div');
+    card.className = 'department-card';
+
+    const memberCount = dept.member_count || (dept.members ? dept.members.length : 0);
+    const countText = `${memberCount} member${memberCount === 1 ? '' : 's'}`;
+
+    let chipsHtml = '';
+    if (dept.members && dept.members.length > 0) {
+      chipsHtml = dept.members.map(m => `
+        <span class="dept-member-chip">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          <span>${escapeHtml(m.name)}</span>
+        </span>
+      `).join('');
+    } else {
+      chipsHtml = '<span class="dept-empty-chips">No members yet</span>';
+    }
+
+    card.innerHTML = `
+      <div class="department-card-header">
+        <div class="department-card-title-group">
+          <span class="department-card-title">${escapeHtml(dept.name)}</span>
+          <span class="badge-count">${countText}</span>
+        </div>
+        <div class="department-card-actions">
+          <button class="btn-secondary btn-sm btn-dept-add-member" type="button" title="Add member to ${escapeHtml(dept.name)}" aria-label="Add member to ${escapeHtml(dept.name)}">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>Add member</span>
+          </button>
+          <button class="btn-icon-action edit" type="button" title="Edit department" aria-label="Edit department ${escapeHtml(dept.name)}">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          </button>
+          <button class="btn-icon-action delete" type="button" title="Delete department" aria-label="Delete department ${escapeHtml(dept.name)}">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
+        </div>
+      </div>
+      <div class="dept-chips-list">
+        ${chipsHtml}
+      </div>
+    `;
+
+    card.querySelector('.btn-dept-add-member').addEventListener('click', () => {
+      openTeamMemberDialog(null);
+    });
+
+    card.querySelector('.btn-icon-action.edit').addEventListener('click', () => {
+      openDepartmentDialog(dept);
+    });
+
+    card.querySelector('.btn-icon-action.delete').addEventListener('click', () => {
+      openDeleteDepartmentDialog(dept);
+    });
+
+    els.departmentsListContainer.appendChild(card);
+  });
+}
+
+function openDepartmentDialog(deptToEdit = null) {
+  state.editingDepartment = deptToEdit;
+  if (els.deptDialogError) {
+    els.deptDialogError.style.display = 'none';
+    els.deptDialogError.textContent = '';
+  }
+
+  if (deptToEdit) {
+    els.deptDialogTitle.textContent = 'Edit department';
+    els.btnSaveDeptText.textContent = 'Save changes';
+    els.deptNameInput.value = deptToEdit.name || '';
+  } else {
+    els.deptDialogTitle.textContent = 'New department';
+    els.btnSaveDeptText.textContent = 'Create department';
+    els.deptNameInput.value = '';
+  }
+
+  els.departmentDialog.showModal();
+  setTimeout(() => els.deptNameInput.focus(), 50);
+}
+
+function closeDepartmentDialog() {
+  els.departmentDialog.close();
+}
+
+function showDeptDialogError(msg) {
+  if (els.deptDialogError) {
+    els.deptDialogError.textContent = msg;
+    els.deptDialogError.style.display = 'block';
+  }
+}
+
+async function handleSaveDepartment(e) {
+  e.preventDefault();
+  const name = (els.deptNameInput.value || '').trim();
+
+  if (!name) {
+    showDeptDialogError('Department name is required.');
+    els.deptNameInput.focus();
+    return;
+  }
+  if (name.length > 60) {
+    showDeptDialogError('Department name must be at most 60 characters.');
+    return;
+  }
+
+  els.btnSaveDept.disabled = true;
+  els.btnSaveDeptText.textContent = 'Saving...';
+
+  try {
+    const isEdit = state.editingDepartment != null;
+    const url = isEdit ? `/api/departments/${state.editingDepartment.id}` : '/api/departments';
+    const method = isEdit ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Failed to save department');
+    }
+
+    appendLog(`Department ${isEdit ? 'updated' : 'created'}: ${data.name}`);
+    closeDepartmentDialog();
+    loadDepartmentsView();
+  } catch (err) {
+    showDeptDialogError(err.message);
+  } finally {
+    els.btnSaveDept.disabled = false;
+    els.btnSaveDeptText.textContent = state.editingDepartment ? 'Save changes' : 'Create department';
+  }
+}
+
+function openDeleteDepartmentDialog(dept) {
+  state.deletingDepartment = dept;
+  const memberCount = dept.member_count || (dept.members ? dept.members.length : 0);
+
+  if (memberCount > 0) {
+    els.deleteDeptBlockedBox.style.display = 'block';
+    els.deleteDeptConfirmBox.style.display = 'none';
+    els.deleteDeptBlockedName.textContent = dept.name;
+    els.deleteDeptMemberCount.textContent = memberCount;
+    els.btnConfirmDeleteDept.style.display = 'none';
+    els.btnCancelDeleteDept.textContent = 'Close';
+  } else {
+    els.deleteDeptBlockedBox.style.display = 'none';
+    els.deleteDeptConfirmBox.style.display = 'block';
+    els.deleteDeptName.textContent = dept.name;
+    els.btnConfirmDeleteDept.style.display = 'inline-flex';
+    els.btnCancelDeleteDept.textContent = 'Cancel';
+  }
+
+  els.deleteDepartmentDialog.showModal();
+}
+
+function closeDeleteDepartmentDialog() {
+  els.deleteDepartmentDialog.close();
+}
+
+async function handleConfirmDeleteDepartment() {
+  if (!state.deletingDepartment) return;
+  els.btnConfirmDeleteDept.disabled = true;
+  els.btnConfirmDeleteDeptText.textContent = 'Deleting...';
+
+  try {
+    const res = await fetch(`/api/departments/${state.deletingDepartment.id}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.detail || 'Failed to delete department');
+    }
+
+    appendLog(`Deleted department ${state.deletingDepartment.name} (id: ${state.deletingDepartment.id})`);
+    closeDeleteDepartmentDialog();
+    loadDepartmentsView();
+  } catch (err) {
+    alert(`Could not delete department: ${err.message}`);
+  } finally {
+    els.btnConfirmDeleteDept.disabled = false;
+    els.btnConfirmDeleteDeptText.textContent = 'Delete department';
+  }
+}
+
+// ── Team Members View & Management ──
+async function loadTeamMembersView() {
+  try {
+    const [deptRes, teamRes] = await Promise.all([
+      fetch('/api/departments'),
+      fetch('/api/team-members')
+    ]);
+    if (!deptRes.ok) throw new Error(`HTTP ${deptRes.status} loading departments`);
+    if (!teamRes.ok) throw new Error(`HTTP ${teamRes.status} loading team members`);
+
+    const departments = await deptRes.json();
+    const teamMembers = await teamRes.json();
+
+    state.departments = departments;
+    state.teamMembers = teamMembers;
+
+    renderTeamMembersList(departments, teamMembers);
+  } catch (err) {
+    appendLog(`Failed to load team members: ${err.message}`);
+  }
+}
+
+function renderTeamMembersList(departments, teamMembers) {
+  if (!els.teamMembersListContainer || !els.teamEmptyNoDepts || !els.teamEmptyState) return;
+
+  if (!departments || departments.length === 0) {
+    els.teamEmptyNoDepts.style.display = 'block';
+    els.teamEmptyState.style.display = 'none';
+    els.teamMembersListContainer.style.display = 'none';
+    els.teamMembersListContainer.innerHTML = '';
+    return;
+  }
+
+  els.teamEmptyNoDepts.style.display = 'none';
+
+  if (!teamMembers || teamMembers.length === 0) {
+    els.teamEmptyState.style.display = 'block';
+    els.teamMembersListContainer.style.display = 'none';
+    els.teamMembersListContainer.innerHTML = '';
+    return;
+  }
+
+  els.teamEmptyState.style.display = 'none';
+  els.teamMembersListContainer.style.display = 'flex';
+  els.teamMembersListContainer.innerHTML = '';
+
+  teamMembers.forEach(member => {
+    const row = document.createElement('div');
+    row.className = 'team-member-row';
+
+    row.innerHTML = `
+      <div class="team-member-info">
+        <span class="team-member-name">${escapeHtml(member.name)}</span>
+        <span class="badge-dept">${escapeHtml(member.department_name || '')}</span>
+      </div>
+      <div class="team-member-actions">
+        <button class="btn-icon-action edit" type="button" title="Edit member" aria-label="Edit member ${escapeHtml(member.name)}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        </button>
+        <button class="btn-icon-action delete" type="button" title="Delete member" aria-label="Delete member ${escapeHtml(member.name)}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        </button>
+      </div>
+    `;
+
+    row.querySelector('.btn-icon-action.edit').addEventListener('click', () => {
+      openTeamMemberDialog(member);
+    });
+
+    row.querySelector('.btn-icon-action.delete').addEventListener('click', () => {
+      openDeleteTeamMemberDialog(member);
+    });
+
+    els.teamMembersListContainer.appendChild(row);
+  });
+}
+
+async function ensureDepartmentsLoaded() {
+  if (!state.departments || state.departments.length === 0) {
+    try {
+      const res = await fetch('/api/departments');
+      if (res.ok) {
+        state.departments = await res.json();
+      }
+    } catch (err) {
+      // ignore
+    }
+  }
+}
+
+async function openTeamMemberDialog(memberToEdit = null) {
+  await ensureDepartmentsLoaded();
+
+  state.editingTeamMember = memberToEdit;
+  if (els.teamMemberDialogError) {
+    els.teamMemberDialogError.style.display = 'none';
+    els.teamMemberDialogError.textContent = '';
+  }
+
+  // Populate department select
+  els.teamMemberDeptSelect.innerHTML = '<option value="" disabled selected>Select a department...</option>';
+  (state.departments || []).forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.id;
+    opt.textContent = d.name;
+    els.teamMemberDeptSelect.appendChild(opt);
+  });
+
+  if (memberToEdit) {
+    els.teamMemberDialogTitle.textContent = 'Edit team member';
+    els.btnSaveTeamMemberText.textContent = 'Save changes';
+    els.teamMemberNameInput.value = memberToEdit.name || '';
+    els.teamMemberDeptSelect.value = String(memberToEdit.department_id);
+  } else {
+    els.teamMemberDialogTitle.textContent = 'New team member';
+    els.btnSaveTeamMemberText.textContent = 'Create member';
+    els.teamMemberNameInput.value = '';
+    els.teamMemberDeptSelect.value = '';
+  }
+
+  els.teamMemberDialog.showModal();
+  setTimeout(() => els.teamMemberNameInput.focus(), 50);
+}
+
+function closeTeamMemberDialog() {
+  els.teamMemberDialog.close();
+}
+
+function showMemberDialogError(msg) {
+  if (els.teamMemberDialogError) {
+    els.teamMemberDialogError.textContent = msg;
+    els.teamMemberDialogError.style.display = 'block';
+  }
+}
+
+async function handleSaveTeamMember(e) {
+  e.preventDefault();
+  const name = (els.teamMemberNameInput.value || '').trim();
+  const deptIdVal = els.teamMemberDeptSelect.value;
+  const department_id = parseInt(deptIdVal, 10);
+
+  if (!name) {
+    showMemberDialogError('Member name is required.');
+    els.teamMemberNameInput.focus();
+    return;
+  }
+  if (name.length > 100) {
+    showMemberDialogError('Member name must be at most 100 characters.');
+    return;
+  }
+  if (!deptIdVal || isNaN(department_id)) {
+    showMemberDialogError('Please select a department.');
+    return;
+  }
+
+  els.btnSaveTeamMember.disabled = true;
+  els.btnSaveTeamMemberText.textContent = 'Saving...';
+
+  try {
+    const isEdit = state.editingTeamMember != null;
+    const url = isEdit ? `/api/team-members/${state.editingTeamMember.id}` : '/api/team-members';
+    const method = isEdit ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, department_id })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Failed to save team member');
+    }
+
+    appendLog(`Team member ${isEdit ? 'updated' : 'created'}: ${data.name}`);
+    closeTeamMemberDialog();
+
+    // Reload the appropriate view
+    if (window.location.hash === '#/departments') {
+      loadDepartmentsView();
+    } else {
+      loadTeamMembersView();
+    }
+  } catch (err) {
+    showMemberDialogError(err.message);
+  } finally {
+    els.btnSaveTeamMember.disabled = false;
+    els.btnSaveTeamMemberText.textContent = state.editingTeamMember ? 'Save changes' : 'Create member';
+  }
+}
+
+function openDeleteTeamMemberDialog(member) {
+  state.deletingTeamMember = member;
+  if (els.deleteMemberName) els.deleteMemberName.textContent = member.name;
+
+  const count = member.assigned_ticket_count || 0;
+  if (els.deleteMemberTicketsWarning) {
+    if (count > 0) {
+      els.deleteMemberTicketsWarning.textContent =
+        `This member is currently assigned to ${count} ticket${count === 1 ? '' : 's'}. Deleting them will keep their name on those tickets as not on team.`;
+    } else {
+      els.deleteMemberTicketsWarning.textContent = 'This member has no assigned tickets.';
+    }
+  }
+
+  els.deleteTeamMemberDialog.showModal();
+}
+
+function closeDeleteTeamMemberDialog() {
+  els.deleteTeamMemberDialog.close();
+}
+
+async function handleConfirmDeleteTeamMember() {
+  if (!state.deletingTeamMember) return;
+  els.btnConfirmDeleteMember.disabled = true;
+  els.btnConfirmDeleteMemberText.textContent = 'Deleting...';
+
+  try {
+    const res = await fetch(`/api/team-members/${state.deletingTeamMember.id}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.detail || 'Failed to delete team member');
+    }
+
+    appendLog(`Deleted team member ${state.deletingTeamMember.name} (id: ${state.deletingTeamMember.id})`);
+    closeDeleteTeamMemberDialog();
+
+    if (window.location.hash === '#/departments') {
+      loadDepartmentsView();
+    } else {
+      loadTeamMembersView();
+    }
+  } catch (err) {
+    alert(`Could not delete team member: ${err.message}`);
+  } finally {
+    els.btnConfirmDeleteMember.disabled = false;
+    els.btnConfirmDeleteMemberText.textContent = 'Delete member';
   }
 }
 
@@ -1078,6 +1575,7 @@ function updateStepUI(evt) {
   if (evt.tokens_per_second) details.push(`${evt.tokens_per_second} tok/s`);
   if (evt.completion_tokens) details.push(`${evt.completion_tokens} tokens`);
   if (evt.ticket_count != null) details.push(`${evt.ticket_count} tickets parsed`);
+  if (evt.assignee_matching) details.push(evt.assignee_matching);
   if (evt.total_elapsed_s != null) details.push(`Total: ${evt.total_elapsed_s}s`);
   if (evt.error) details.push(`Error: ${evt.error}`);
 
@@ -1107,52 +1605,38 @@ function clearErrorCard() {
   els.errorCard.style.display = 'none';
 }
 
-// ── Ticket Rendering & Markdown Copy ──
-function renderTickets(tickets) {
-  state.currentTickets = tickets || [];
-  els.resultsTicketsList.innerHTML = '';
-  els.ticketsBadgeCount.textContent = state.currentTickets.length;
+// ── Ticket Component & Markdown Copy ──
 
-  state.currentTickets.forEach((t, i) => {
-    const card = document.createElement('div');
-    const p = (t.priority || 'medium').toLowerCase();
-    card.className = `ticket-card ${p}`;
-
-    const acItems = (t.acceptance_criteria || [])
-      .map(ac => `<li class="criteria-item">${escapeHtml(ac)}</li>`)
-      .join('');
-
-    card.innerHTML = `
-      <div class="ticket-header">
-        <h3 class="ticket-title">${escapeHtml(t.title)}</h3>
-        <div class="ticket-tags">
-          <span class="badge p-${p}">${p}</span>
-          ${t.assignee ? `<span class="badge assignee">@${escapeHtml(t.assignee)}</span>` : ''}
-        </div>
-      </div>
-      <div class="ticket-desc">${escapeHtml(t.description)}</div>
-      ${acItems ? `
-        <div class="ticket-criteria">
-          <div class="ticket-criteria-label">Acceptance Criteria</div>
-          <ul class="criteria-list">${acItems}</ul>
-        </div>
-      ` : ''}
-      <div class="ticket-footer">
-        <button class="btn-copy-ticket" onclick="copySingleTicket(${i}, this)">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <span>Copy</span>
-        </button>
-      </div>
-    `;
-    els.resultsTicketsList.appendChild(card);
-  });
+function getAssigneeInfo(assignee) {
+  if (!assignee) return null;
+  if (typeof assignee === 'string') {
+    const trimmed = assignee.trim();
+    if (!trimmed) return null;
+    return { name: trimmed, on_team: false, department: null, member_id: null };
+  }
+  if (typeof assignee === 'object') {
+    if (!assignee.name || !assignee.name.trim()) return null;
+    return {
+      name: assignee.name.trim(),
+      on_team: Boolean(assignee.on_team),
+      department: assignee.department || null,
+      member_id: assignee.member_id || null
+    };
+  }
+  return null;
 }
 
 function formatTicketMd(t) {
   let md = `### ${t.title}\n\n`;
   md += `**Priority:** ${t.priority || 'medium'}  \n`;
-  if (t.assignee) md += `**Assignee:** ${t.assignee}  \n`;
-  md += `\n${t.description}\n\n`;
+  const info = getAssigneeInfo(t.assignee);
+  if (info && info.name) {
+    let extra = '';
+    if (info.on_team && info.department) extra = ` (${info.department})`;
+    else if (!info.on_team) extra = ` (Not on team)`;
+    md += `**Assignee:** @${info.name}${extra}  \n`;
+  }
+  md += `\n${t.description || ''}\n\n`;
   if (t.acceptance_criteria && t.acceptance_criteria.length > 0) {
     md += `**Acceptance Criteria:**\n`;
     t.acceptance_criteria.forEach(ac => {
@@ -1162,17 +1646,483 @@ function formatTicketMd(t) {
   return md.trim();
 }
 
-async function copySingleTicket(index, btn) {
-  const t = state.currentTickets[index];
-  if (!t) return;
-  const md = formatTicketMd(t);
-  await navigator.clipboard.writeText(md);
-  btn.classList.add('copied');
-  btn.querySelector('span').textContent = 'Copied';
-  setTimeout(() => {
-    btn.classList.remove('copied');
-    btn.querySelector('span').textContent = 'Copy';
-  }, 2000);
+function announceTicketStatus(msg) {
+  const el = document.getElementById('ticket-announcer');
+  if (el) {
+    el.textContent = '';
+    setTimeout(() => {
+      el.textContent = msg;
+    }, 50);
+  }
+}
+
+function createTicketCard(ticket, options = {}) {
+  const card = document.createElement('div');
+  const readOnlyReason = options.readOnlyReason || (!ticket.id ? "Meeting wasn't saved, so changes can't be saved." : null);
+
+  function updateCardClass() {
+    const p = (ticket.priority || 'medium').toLowerCase();
+    const isApproved = ticket.status === 'approved';
+    card.className = `ticket-card ${p}${isApproved ? ' approved' : ''}`;
+  }
+  updateCardClass();
+
+  const viewContainer = document.createElement('div');
+  viewContainer.className = 'ticket-view-mode';
+
+  const editContainer = document.createElement('div');
+  editContainer.className = 'ticket-edit-mode';
+  editContainer.style.display = 'none';
+
+  card.appendChild(viewContainer);
+  card.appendChild(editContainer);
+
+  let editBtnRef = null;
+
+  function renderView() {
+    updateCardClass();
+    const p = (ticket.priority || 'medium').toLowerCase();
+    const isApproved = ticket.status === 'approved';
+
+    const acItems = (ticket.acceptance_criteria || [])
+      .map(ac => `<li class="criteria-item">${escapeHtml(ac)}</li>`)
+      .join('');
+
+    const statusBadge = isApproved
+      ? `<span class="badge badge-status approved" aria-label="Status: Approved">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+          Approved
+        </span>`
+      : `<span class="badge badge-status pending" aria-label="Status: Pending">Pending</span>`;
+
+    const assigneeInfo = getAssigneeInfo(ticket.assignee);
+    let assigneeBadge = '';
+    if (assigneeInfo) {
+      if (assigneeInfo.on_team) {
+        assigneeBadge = `
+          <span class="badge assignee team" title="Team member${assigneeInfo.department ? ' (' + escapeHtml(assigneeInfo.department) + ')' : ''}">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            <span class="assignee-name">@${escapeHtml(assigneeInfo.name)}</span>
+            ${assigneeInfo.department ? `<span class="assignee-dept">${escapeHtml(assigneeInfo.department)}</span>` : ''}
+          </span>
+        `;
+      } else {
+        assigneeBadge = `
+          <span class="badge assignee not-on-team" title="Not on team: This person is not registered as a team member" aria-label="Assignee: @${escapeHtml(assigneeInfo.name)} (Not on team)">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            <span class="assignee-name">@${escapeHtml(assigneeInfo.name)}</span>
+            <span class="assignee-not-on-team-label">Not on team</span>
+          </span>
+        `;
+      }
+    }
+
+    viewContainer.innerHTML = `
+      <div class="ticket-header">
+        <h3 class="ticket-title">${escapeHtml(ticket.title)}</h3>
+        <div class="ticket-tags">
+          ${statusBadge}
+          <span class="badge p-${p}">${p}</span>
+          ${assigneeBadge}
+        </div>
+      </div>
+      <div class="ticket-desc">${escapeHtml(ticket.description || '')}</div>
+      ${acItems ? `
+        <div class="ticket-criteria">
+          <div class="ticket-criteria-label">Acceptance Criteria</div>
+          <ul class="criteria-list">${acItems}</ul>
+        </div>
+      ` : ''}
+      <div class="ticket-footer">
+        <div class="ticket-footer-msg" aria-live="polite">
+          ${readOnlyReason ? `<span class="ticket-read-only-note">${escapeHtml(readOnlyReason)}</span>` : ''}
+        </div>
+        <div class="ticket-footer-actions">
+          ${isApproved
+            ? `<button class="btn-ticket btn-undo-approval" type="button" aria-label="Undo approval for ${escapeHtml(ticket.title)}"${readOnlyReason ? ' disabled' : ''}>Undo approval</button>`
+            : `<button class="btn-ticket btn-approve" type="button" aria-label="Approve ticket ${escapeHtml(ticket.title)}"${readOnlyReason ? ' disabled' : ''}>Approve</button>`
+          }
+          <button class="btn-ticket btn-edit-ticket" type="button" aria-label="Edit ticket ${escapeHtml(ticket.title)}"${readOnlyReason ? ' disabled' : ''}>Edit</button>
+          <button class="btn-copy-ticket" type="button" aria-label="Copy ticket as Markdown">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span>Copy</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    const footerMsg = viewContainer.querySelector('.ticket-footer-msg');
+    const approveBtn = viewContainer.querySelector('.btn-approve');
+    const undoBtn = viewContainer.querySelector('.btn-undo-approval');
+    const editBtn = viewContainer.querySelector('.btn-edit-ticket');
+    const copyBtn = viewContainer.querySelector('.btn-copy-ticket');
+    editBtnRef = editBtn;
+
+    if (approveBtn && !readOnlyReason) {
+      approveBtn.addEventListener('click', async () => {
+        if (!ticket.id) return;
+        approveBtn.disabled = true;
+        footerMsg.innerHTML = '';
+        try {
+          const res = await fetch(`/api/tickets/${ticket.id}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'approved' }),
+          });
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || `HTTP ${res.status}`);
+          }
+          const updated = await res.json();
+          Object.assign(ticket, updated);
+          announceTicketStatus(`Ticket "${ticket.title}" approved.`);
+          renderView();
+          if (typeof options.onUpdate === 'function') options.onUpdate(ticket);
+        } catch (err) {
+          footerMsg.innerHTML = `<span class="field-error">Approval failed: ${escapeHtml(err.message)}</span>`;
+          approveBtn.disabled = false;
+        }
+      });
+    }
+
+    if (undoBtn && !readOnlyReason) {
+      undoBtn.addEventListener('click', async () => {
+        if (!ticket.id) return;
+        undoBtn.disabled = true;
+        footerMsg.innerHTML = '';
+        try {
+          const res = await fetch(`/api/tickets/${ticket.id}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'pending' }),
+          });
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || `HTTP ${res.status}`);
+          }
+          const updated = await res.json();
+          Object.assign(ticket, updated);
+          announceTicketStatus(`Approval undone for ticket "${ticket.title}". Status is now Pending.`);
+          renderView();
+          if (typeof options.onUpdate === 'function') options.onUpdate(ticket);
+        } catch (err) {
+          footerMsg.innerHTML = `<span class="field-error">Undo failed: ${escapeHtml(err.message)}</span>`;
+          undoBtn.disabled = false;
+        }
+      });
+    }
+
+    if (editBtn && !readOnlyReason) {
+      editBtn.addEventListener('click', () => {
+        enterEditMode();
+      });
+    }
+
+    if (copyBtn) {
+      copyBtn.addEventListener('click', async () => {
+        const md = formatTicketMd(ticket);
+        await navigator.clipboard.writeText(md);
+        copyBtn.classList.add('copied');
+        copyBtn.querySelector('span').textContent = 'Copied';
+        setTimeout(() => {
+          copyBtn.classList.remove('copied');
+          copyBtn.querySelector('span').textContent = 'Copy';
+        }, 2000);
+      });
+    }
+  }
+
+  async function enterEditMode() {
+    await ensureTeamDataLoaded();
+
+    viewContainer.style.display = 'none';
+    editContainer.style.display = 'block';
+
+    const isApproved = ticket.status === 'approved';
+    const formIdPrefix = `t-${ticket.id || Math.random().toString(36).slice(2, 7)}`;
+
+    const depts = state.departments || [];
+    const members = state.teamMembers || [];
+
+    const deptMap = new Map();
+    depts.forEach(d => deptMap.set(d.id, { name: d.name, members: [] }));
+
+    members.forEach(m => {
+      if (deptMap.has(m.department_id)) {
+        deptMap.get(m.department_id).members.push(m);
+      } else {
+        const deptName = m.department_name || 'Other';
+        if (!deptMap.has(m.department_id)) {
+          deptMap.set(m.department_id, { name: deptName, members: [m] });
+        } else {
+          deptMap.get(m.department_id).members.push(m);
+        }
+      }
+    });
+
+    let optgroupsHtml = '';
+    for (const [, deptData] of deptMap.entries()) {
+      if (deptData.members.length > 0) {
+        optgroupsHtml += `<optgroup label="${escapeHtml(deptData.name)}">`;
+        deptData.members.forEach(m => {
+          optgroupsHtml += `<option value="${m.id}">${escapeHtml(m.name)}</option>`;
+        });
+        optgroupsHtml += `</optgroup>`;
+      }
+    }
+
+    const currentAssignee = getAssigneeInfo(ticket.assignee);
+
+    editContainer.innerHTML = `
+      <form class="ticket-edit-form" novalidate>
+        ${isApproved ? `<div class="edit-note-approved">Saving changes will move this ticket back to Pending.</div>` : ''}
+        <div class="form-group">
+          <label class="form-label" for="${formIdPrefix}-title">Title <span class="required-star">*</span></label>
+          <input type="text" id="${formIdPrefix}-title" class="text-input edit-field-title" value="${escapeHtml(ticket.title)}" maxlength="200" required aria-describedby="${formIdPrefix}-err-title">
+          <div id="${formIdPrefix}-err-title" class="field-error" aria-live="polite"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="${formIdPrefix}-desc">Description</label>
+          <textarea id="${formIdPrefix}-desc" class="text-input textarea-input edit-field-desc" rows="3" maxlength="2000" aria-describedby="${formIdPrefix}-err-desc">${escapeHtml(ticket.description || '')}</textarea>
+          <div id="${formIdPrefix}-err-desc" class="field-error" aria-live="polite"></div>
+        </div>
+        <div class="form-row-2col">
+          <div class="form-group">
+            <label class="form-label" for="${formIdPrefix}-priority">Priority</label>
+            <select id="${formIdPrefix}-priority" class="text-input select-input edit-field-priority">
+              <option value="low" ${ticket.priority === 'low' ? 'selected' : ''}>Low</option>
+              <option value="medium" ${ticket.priority === 'medium' || !ticket.priority ? 'selected' : ''}>Medium</option>
+              <option value="high" ${ticket.priority === 'high' ? 'selected' : ''}>High</option>
+            </select>
+            <div id="${formIdPrefix}-err-priority" class="field-error" aria-live="polite"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="${formIdPrefix}-assignee-select">Assignee</label>
+            <select id="${formIdPrefix}-assignee-select" class="text-input select-input edit-field-assignee-select">
+              <option value="">Unassigned</option>
+              ${optgroupsHtml}
+              <option value="__other__">Someone else...</option>
+            </select>
+            <div id="${formIdPrefix}-other-wrapper" class="assignee-other-wrapper" style="display: none; margin-top: 0.4rem;">
+              <input type="text" id="${formIdPrefix}-assignee-other" class="text-input edit-field-assignee-other" maxlength="100" placeholder="Enter name not on team..." aria-describedby="${formIdPrefix}-err-assignee">
+            </div>
+            <div id="${formIdPrefix}-err-assignee" class="field-error" aria-live="polite"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="${formIdPrefix}-criteria">Acceptance Criteria <span class="form-hint" style="font-size:0.75rem; color:var(--text-subtle);">(one per line)</span></label>
+          <textarea id="${formIdPrefix}-criteria" class="text-input textarea-input edit-field-criteria" rows="4" placeholder="One criterion per line" aria-describedby="${formIdPrefix}-err-criteria">${escapeHtml((ticket.acceptance_criteria || []).join('\n'))}</textarea>
+          <div id="${formIdPrefix}-err-criteria" class="field-error" aria-live="polite"></div>
+        </div>
+        <div class="edit-general-error field-error" aria-live="polite"></div>
+        <div class="edit-form-footer">
+          <button type="submit" class="btn-primary btn-save-ticket">Save</button>
+          <button type="button" class="btn-secondary btn-cancel-ticket">Cancel</button>
+        </div>
+      </form>
+    `;
+
+    const form = editContainer.querySelector('.ticket-edit-form');
+    const titleInput = editContainer.querySelector('.edit-field-title');
+    const descInput = editContainer.querySelector('.edit-field-desc');
+    const priorityInput = editContainer.querySelector('.edit-field-priority');
+    const assigneeSelect = editContainer.querySelector('.edit-field-assignee-select');
+    const otherWrapper = document.getElementById(`${formIdPrefix}-other-wrapper`);
+    const otherInput = editContainer.querySelector('.edit-field-assignee-other');
+    const criteriaInput = editContainer.querySelector('.edit-field-criteria');
+    const saveBtn = editContainer.querySelector('.btn-save-ticket');
+    const cancelBtn = editContainer.querySelector('.btn-cancel-ticket');
+    const genError = editContainer.querySelector('.edit-general-error');
+
+    const errTitle = document.getElementById(`${formIdPrefix}-err-title`);
+    const errDesc = document.getElementById(`${formIdPrefix}-err-desc`);
+    const errPriority = document.getElementById(`${formIdPrefix}-err-priority`);
+    const errAssignee = document.getElementById(`${formIdPrefix}-err-assignee`);
+    const errCriteria = document.getElementById(`${formIdPrefix}-err-criteria`);
+
+    if (currentAssignee && currentAssignee.member_id) {
+      assigneeSelect.value = String(currentAssignee.member_id);
+      otherWrapper.style.display = 'none';
+      otherInput.value = '';
+    } else if (currentAssignee && currentAssignee.name) {
+      assigneeSelect.value = '__other__';
+      otherWrapper.style.display = 'block';
+      otherInput.value = currentAssignee.name;
+    } else {
+      assigneeSelect.value = '';
+      otherWrapper.style.display = 'none';
+      otherInput.value = '';
+    }
+
+    assigneeSelect.addEventListener('change', () => {
+      if (assigneeSelect.value === '__other__') {
+        otherWrapper.style.display = 'block';
+        otherInput.focus();
+      } else {
+        otherWrapper.style.display = 'none';
+        otherInput.value = '';
+        if (errAssignee) errAssignee.textContent = '';
+      }
+    });
+
+    function clearErrors() {
+      if (errTitle) errTitle.textContent = '';
+      if (errDesc) errDesc.textContent = '';
+      if (errPriority) errPriority.textContent = '';
+      if (errAssignee) errAssignee.textContent = '';
+      if (errCriteria) errCriteria.textContent = '';
+      if (genError) genError.textContent = '';
+    }
+
+    function exitEditMode() {
+      editContainer.style.display = 'none';
+      viewContainer.style.display = 'block';
+      if (editBtnRef) {
+        editBtnRef.focus();
+      }
+    }
+
+    cancelBtn.addEventListener('click', () => {
+      exitEditMode();
+    });
+
+    form.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        exitEditMode();
+      }
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearErrors();
+
+      let hasError = false;
+      const titleVal = titleInput.value.trim();
+      if (!titleVal) {
+        errTitle.textContent = 'Title is required';
+        hasError = true;
+      } else if (titleVal.length > 200) {
+        errTitle.textContent = 'Title must be at most 200 characters';
+        hasError = true;
+      }
+
+      const descVal = descInput.value;
+      if (descVal.length > 2000) {
+        errDesc.textContent = 'Description must be at most 2000 characters';
+        hasError = true;
+      }
+
+      let targetMemberId = null;
+      let targetAssigneeName = null;
+
+      if (assigneeSelect.value === '__other__') {
+        const customName = otherInput.value.trim();
+        if (customName.length > 100) {
+          errAssignee.textContent = 'Assignee must be at most 100 characters';
+          hasError = true;
+        }
+        targetAssigneeName = customName || null;
+      } else if (assigneeSelect.value) {
+        targetMemberId = parseInt(assigneeSelect.value, 10);
+      }
+
+      const priorityVal = priorityInput.value.toLowerCase();
+      if (!['low', 'medium', 'high'].includes(priorityVal)) {
+        errPriority.textContent = "Priority must be 'low', 'medium', or 'high'";
+        hasError = true;
+      }
+
+      const rawLines = criteriaInput.value.split('\n');
+      const cleanCriteria = rawLines.map(l => l.trim()).filter(Boolean);
+      if (cleanCriteria.length > 20) {
+        errCriteria.textContent = 'At most 20 acceptance criteria allowed';
+        hasError = true;
+      } else {
+        for (const item of cleanCriteria) {
+          if (item.length > 300) {
+            errCriteria.textContent = 'Each criterion must be at most 300 characters';
+            hasError = true;
+            break;
+          }
+        }
+      }
+
+      if (hasError) return;
+
+      saveBtn.disabled = true;
+      cancelBtn.disabled = true;
+
+      try {
+        const payload = {
+          title: titleVal,
+          description: descVal,
+          priority: priorityVal,
+          acceptance_criteria: cleanCriteria,
+          assignee_member_id: targetMemberId,
+          assignee_name: targetAssigneeName,
+        };
+
+        const res = await fetch(`/api/tickets/${ticket.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          if (res.status === 422 && errData.errors) {
+            if (errData.errors.title && errTitle) errTitle.textContent = errData.errors.title;
+            if (errData.errors.description && errDesc) errDesc.textContent = errData.errors.description;
+            const aErr = errData.errors.assignee || errData.errors.assignee_name || errData.errors.assignee_member_id;
+            if (aErr && errAssignee) errAssignee.textContent = aErr;
+            if (errData.errors.priority && errPriority) errPriority.textContent = errData.errors.priority;
+            if (errData.errors.acceptance_criteria && errCriteria) errCriteria.textContent = errData.errors.acceptance_criteria;
+            return;
+          }
+          throw new Error(errData.detail || `HTTP ${res.status}`);
+        }
+
+        const updated = await res.json();
+        Object.assign(ticket, updated);
+        announceTicketStatus(`Ticket "${ticket.title}" saved.`);
+        renderView();
+        exitEditMode();
+        if (typeof options.onUpdate === 'function') options.onUpdate(ticket);
+      } catch (err) {
+        genError.textContent = `Save failed: ${err.message}`;
+      } finally {
+        saveBtn.disabled = false;
+        cancelBtn.disabled = false;
+      }
+    });
+
+    titleInput.focus();
+    titleInput.select();
+  }
+
+  renderView();
+  return card;
+}
+
+function renderTickets(tickets, options = {}) {
+  state.currentTickets = tickets || [];
+  if (!els.resultsTicketsList) return;
+  els.resultsTicketsList.innerHTML = '';
+  if (els.ticketsBadgeCount) {
+    els.ticketsBadgeCount.textContent = state.currentTickets.length;
+  }
+
+  state.currentTickets.forEach((t, i) => {
+    const card = createTicketCard(t, {
+      context: 'results',
+      readOnlyReason: options.readOnlyReason || (!t.id ? "Meeting wasn't saved, so changes can't be saved." : null),
+      onUpdate: (updatedTicket) => {
+        state.currentTickets[i] = updatedTicket;
+      }
+    });
+    els.resultsTicketsList.appendChild(card);
+  });
 }
 
 async function copyAllTickets() {
@@ -1276,7 +2226,8 @@ function subscribeToJobEvents(jobId) {
           // Finished successfully
           state.currentTranscript = data.transcript || '';
           els.resultsTranscriptCard.textContent = state.currentTranscript || 'No transcript available.';
-          renderTickets(data.tickets || []);
+          const readOnlyReason = (!data.meeting_id || data.save_error) ? "Meeting wasn't saved, so changes can't be saved." : null;
+          renderTickets(data.tickets || [], { meetingId: data.meeting_id, readOnlyReason });
 
           if (data.save_error) {
             appendLog(`Storage warning: ${data.save_error}`);
@@ -1485,6 +2436,82 @@ function bindEvents() {
     });
   }
 
+  // Departments actions
+  if (els.btnCreateDepartment) {
+    els.btnCreateDepartment.addEventListener('click', () => openDepartmentDialog());
+  }
+  if (els.btnCreateDepartmentEmpty) {
+    els.btnCreateDepartmentEmpty.addEventListener('click', () => openDepartmentDialog());
+  }
+  if (els.btnCloseDeptDialog) {
+    els.btnCloseDeptDialog.addEventListener('click', closeDepartmentDialog);
+  }
+  if (els.btnCancelDept) {
+    els.btnCancelDept.addEventListener('click', closeDepartmentDialog);
+  }
+  if (els.departmentDialogForm) {
+    els.departmentDialogForm.addEventListener('submit', handleSaveDepartment);
+  }
+  if (els.departmentDialog) {
+    els.departmentDialog.addEventListener('click', (e) => {
+      if (e.target === els.departmentDialog) closeDepartmentDialog();
+    });
+  }
+
+  // Delete Department Dialog events
+  if (els.btnCloseDeleteDeptDialog) {
+    els.btnCloseDeleteDeptDialog.addEventListener('click', closeDeleteDepartmentDialog);
+  }
+  if (els.btnCancelDeleteDept) {
+    els.btnCancelDeleteDept.addEventListener('click', closeDeleteDepartmentDialog);
+  }
+  if (els.btnConfirmDeleteDept) {
+    els.btnConfirmDeleteDept.addEventListener('click', handleConfirmDeleteDepartment);
+  }
+  if (els.deleteDepartmentDialog) {
+    els.deleteDepartmentDialog.addEventListener('click', (e) => {
+      if (e.target === els.deleteDepartmentDialog) closeDeleteDepartmentDialog();
+    });
+  }
+
+  // Team Members actions
+  if (els.btnCreateTeamMember) {
+    els.btnCreateTeamMember.addEventListener('click', () => openTeamMemberDialog());
+  }
+  if (els.btnCreateMemberEmpty) {
+    els.btnCreateMemberEmpty.addEventListener('click', () => openTeamMemberDialog());
+  }
+  if (els.btnCloseTeamMemberDialog) {
+    els.btnCloseTeamMemberDialog.addEventListener('click', closeTeamMemberDialog);
+  }
+  if (els.btnCancelTeamMember) {
+    els.btnCancelTeamMember.addEventListener('click', closeTeamMemberDialog);
+  }
+  if (els.teamMemberDialogForm) {
+    els.teamMemberDialogForm.addEventListener('submit', handleSaveTeamMember);
+  }
+  if (els.teamMemberDialog) {
+    els.teamMemberDialog.addEventListener('click', (e) => {
+      if (e.target === els.teamMemberDialog) closeTeamMemberDialog();
+    });
+  }
+
+  // Delete Team Member Dialog events
+  if (els.btnCloseDeleteMemberDialog) {
+    els.btnCloseDeleteMemberDialog.addEventListener('click', closeDeleteTeamMemberDialog);
+  }
+  if (els.btnCancelDeleteMember) {
+    els.btnCancelDeleteMember.addEventListener('click', closeDeleteTeamMemberDialog);
+  }
+  if (els.btnConfirmDeleteMember) {
+    els.btnConfirmDeleteMember.addEventListener('click', handleConfirmDeleteTeamMember);
+  }
+  if (els.deleteTeamMemberDialog) {
+    els.deleteTeamMemberDialog.addEventListener('click', (e) => {
+      if (e.target === els.deleteTeamMemberDialog) closeDeleteTeamMemberDialog();
+    });
+  }
+
   // Project select dropdown change
   if (els.selectProject) {
     els.selectProject.addEventListener('change', validateInputs);
@@ -1535,6 +2562,7 @@ document.addEventListener('DOMContentLoaded', () => {
   bindEvents();
   handleRoute();
   loadProjects();
+  ensureTeamDataLoaded();
   validateInputs();
   refreshHealth();
   loadModelsRegistry();

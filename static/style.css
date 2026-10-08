@@ -315,6 +315,7 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
+  cursor: pointer;
   transition: all var(--transition-fast);
 }
 
@@ -344,7 +345,8 @@ body {
   transition: color var(--transition-fast);
 }
 
-.project-card-title:hover {
+.project-card-title:hover,
+.project-card:hover .project-card-title {
   color: var(--accent);
 }
 
@@ -501,6 +503,7 @@ body {
   padding: 1rem 1.25rem;
   text-decoration: none;
   color: inherit;
+  cursor: pointer;
   transition: all var(--transition-fast);
 }
 
@@ -1699,11 +1702,51 @@ textarea.notes-input:focus {
 .badge.p-medium { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-border); }
 .badge.p-low { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); }
 .badge.assignee {
+  text-transform: none;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-full);
+}
+
+.badge.assignee.team {
   background: var(--accent-subtle);
   color: var(--accent);
   border: 1px solid var(--accent-border);
-  text-transform: none;
-  font-weight: 600;
+}
+
+.badge.assignee .assignee-dept {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  border-left: 1px solid var(--accent-border);
+  padding-left: 0.35rem;
+  margin-left: 0.15rem;
+}
+
+.badge.assignee.not-on-team {
+  background: var(--warning-bg);
+  color: var(--warning);
+  border: 1px solid var(--warning-border);
+}
+
+.badge.assignee .assignee-not-on-team-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--warning-border);
+  color: var(--text);
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius-sm);
+  margin-left: 0.25rem;
+}
+
+[data-theme="dark"] .badge.assignee .assignee-not-on-team-label {
+  background: rgba(245, 158, 11, 0.28);
+  color: #fbbf24;
 }
 
 .ticket-desc {
@@ -1745,10 +1788,101 @@ textarea.notes-input:focus {
   font-weight: bold;
 }
 
+.ticket-card.approved {
+  border-left-color: var(--success) !important;
+  box-shadow: 0 0 0 1px var(--success-border), var(--shadow-sm);
+}
+
+.badge-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+.badge-status.pending {
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  border: 1px solid var(--surface-border);
+}
+.badge-status.approved {
+  background: var(--success-bg);
+  color: var(--success);
+  border: 1px solid var(--success-border);
+}
+
 .ticket-footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
 }
+.ticket-footer-msg {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  flex: 1;
+  min-width: 0;
+}
+.ticket-footer-msg .field-error {
+  color: var(--danger);
+  font-weight: 500;
+}
+.ticket-read-only-note {
+  font-size: 0.8rem;
+  color: var(--warning);
+  font-style: italic;
+}
+.ticket-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-ticket {
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all var(--transition-fast);
+}
+.btn-ticket:hover:not(:disabled) {
+  border-color: var(--surface-border-strong);
+  color: var(--text);
+}
+.btn-ticket:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn-ticket.btn-approve {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+.btn-ticket.btn-approve:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: #ffffff;
+}
+.btn-ticket.btn-undo-approval:hover:not(:disabled) {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+.btn-ticket.btn-edit-ticket:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .btn-copy-ticket {
   background: var(--surface);
   border: 1px solid var(--surface-border);
@@ -1771,6 +1905,67 @@ textarea.notes-input:focus {
   border-color: var(--success);
   color: var(--success);
   background: var(--success-bg);
+}
+
+/* Inline Ticket Edit Form */
+.ticket-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-top: 0.25rem;
+}
+.edit-note-approved {
+  font-size: 0.82rem;
+  color: var(--warning);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.75rem;
+}
+.form-row-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+}
+@media (max-width: 600px) {
+  .form-row-2col {
+    grid-template-columns: 1fr;
+  }
+}
+.field-error {
+  font-size: 0.78rem;
+  color: var(--danger);
+  margin-top: 0.25rem;
+}
+.field-error:empty {
+  display: none;
+}
+.required-star {
+  color: var(--danger);
+}
+.edit-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.35rem;
+}
+.edit-form-footer .btn-primary,
+.edit-form-footer .btn-secondary {
+  padding: 0.45rem 1rem;
+  font-size: 0.84rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 /* Transcript Results Tab */
@@ -1924,4 +2119,137 @@ textarea.notes-input:focus {
   align-items: center;
   background: var(--bg-subtle);
 }
+
+/* ── Departments & Team Members Pages ── */
+.departments-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.department-card {
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  transition: border-color var(--transition-fast);
+}
+
+.department-card:hover {
+  border-color: var(--accent);
+}
+
+.department-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.department-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.department-card-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.department-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.btn-secondary.btn-sm {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.78rem;
+}
+
+.dept-chips-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.dept-member-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  border: 1px solid var(--surface-border);
+  color: var(--text);
+}
+
+.dept-empty-chips {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.team-members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.team-member-row {
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  transition: border-color var(--transition-fast);
+}
+
+.team-member-row:hover {
+  border-color: var(--accent);
+}
+
+.team-member-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.team-member-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.badge-dept {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+}
+
+.team-member-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 

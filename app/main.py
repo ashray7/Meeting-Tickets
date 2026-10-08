@@ -16,6 +16,8 @@ from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from app.assignee_match import match_assignee, TeamMemberRef
+
 # Ensure common audio MIME types are registered
 mimetypes.add_type("audio/mp4", ".m4a")
 mimetypes.add_type("audio/ogg", ".ogg")
@@ -44,6 +46,8 @@ DATA_DIR.mkdir(exist_ok=True)
 AUDIO_DIR = DATA_DIR / "audio"
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "meeting_tickets.db"
+BACKUP_PATH = DATA_DIR / "backup-before-tickets-migration.db"
+TEAM_BACKUP_PATH = DATA_DIR / "backup-before-team-migration.db"
 
 # ── SQLite Database ────────────────────────────────────────────────
 def get_db():
@@ -56,6 +60,21 @@ def init_db():
     DATA_DIR.mkdir(exist_ok=True)
     AUDIO_DIR.mkdir(parents=True, exist_ok=True)
     with get_db() as conn:
+        # Check if backup is needed before team migration
+        dept_exists_before = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='departments'"
+        ).fetchone() is not None
+
+        ticket_tbl_exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='tickets'"
+        ).fetchone() is not None
+        ticket_cols_before = [row["name"] for row in conn.execute("PRAGMA table_info(tickets)").fetchall()] if ticket_tbl_exists else []
+
+        needs_team_migration = (not dept_exists_before) or ("assignee_member_id" not in ticket_cols_before)
+        if needs_team_migration and DB_PATH.exists() and not TEAM_BACKUP_PATH.exists():
+            shutil.copy2(DB_PATH, TEAM_BACKUP_PATH)
+            log.info(f"Created database backup before team migration at {TEAM_BACKUP_PATH}")
+
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS projects (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,12 +96,115 @@ def init_db():
                 audio_file TEXT,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS tickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                meeting_id INTEGER NOT NULL,
+                position INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                assignee TEXT,
+                priority TEXT NOT NULL,
+                acceptance_criteria TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_tickets_meeting_id ON tickets(meeting_id);
+
+            CREATE TABLE IF NOT EXISTS departments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS team_members (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                department_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE RESTRICT
+            );
+            CREATE INDEX IF NOT EXISTS idx_team_members_department_id ON team_members(department_id);
         """)
+
+        # Seed initial departments only when the table was first created
+        if not dept_exists_before:
+            now_str = datetime.now(timezone.utc).isoformat()
+            seed_depts = ["Web Dev", "Mobile Dev", "Database", "QA", "DevOps"]
+            for d_name in seed_depts:
+                conn.execute(
+                    "INSERT INTO departments (name, created_at, updated_at) VALUES (?, ?, ?)",
+                    (d_name, now_str, now_str)
+                )
+            log.info(f"Seeded initial {len(seed_depts)} departments: {', '.join(seed_depts)}")
+
         # Migration: check if audio_file column exists on existing databases
         columns = [row["name"] for row in conn.execute("PRAGMA table_info(meetings)").fetchall()]
         if "audio_file" not in columns:
             conn.execute("ALTER TABLE meetings ADD COLUMN audio_file TEXT;")
             log.info("Migrated meetings table: added audio_file column")
+
+        # Migration: check if assignee_member_id column exists on tickets table
+        t_columns = [row["name"] for row in conn.execute("PRAGMA table_info(tickets)").fetchall()]
+        if "assignee_member_id" not in t_columns:
+            conn.execute("ALTER TABLE tickets ADD COLUMN assignee_member_id INTEGER REFERENCES team_members(id) ON DELETE SET NULL;")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_tickets_assignee_member ON tickets(assignee_member_id);")
+            log.info("Migrated tickets table: added assignee_member_id column")
+
+        # Idempotent migration: check for meetings that have tickets_json but no rows in tickets table
+        unmigrated_rows = conn.execute("""
+            SELECT m.id, m.created_at, m.tickets_json
+            FROM meetings m
+            WHERE NOT EXISTS (SELECT 1 FROM tickets t WHERE t.meeting_id = m.id)
+        """).fetchall()
+
+        meetings_to_migrate = []
+        for row in unmigrated_rows:
+            try:
+                raw_tickets = json.loads(row["tickets_json"]) if row["tickets_json"] else []
+                if isinstance(raw_tickets, list) and len(raw_tickets) > 0:
+                    meetings_to_migrate.append((row["id"], row["created_at"], raw_tickets))
+            except Exception as e:
+                log.warning(f"Could not parse tickets_json for meeting {row['id']}: {e}")
+
+        if meetings_to_migrate:
+            # Backup before first migration if not already created
+            if DB_PATH.exists() and not BACKUP_PATH.exists():
+                shutil.copy2(DB_PATH, BACKUP_PATH)
+                log.info(f"Created database backup before tickets migration at {BACKUP_PATH}")
+
+            migrated_ticket_count = 0
+            for meeting_id, created_at, raw_tickets in meetings_to_migrate:
+                now_str = created_at or datetime.now(timezone.utc).isoformat()
+                for pos, t in enumerate(raw_tickets):
+                    title = str(t.get("title") or "Untitled Ticket").strip()
+                    desc = str(t.get("description") or "")
+                    assignee = t.get("assignee")
+                    if assignee:
+                        assignee = str(assignee).strip()
+                    priority = str(t.get("priority") or "medium").lower()
+                    if priority not in ("low", "medium", "high"):
+                        priority = "medium"
+                    ac = t.get("acceptance_criteria") or []
+                    if not isinstance(ac, list):
+                        ac = []
+                    ac_json = json.dumps(ac)
+                    status = "pending"
+
+                    conn.execute("""
+                        INSERT INTO tickets (
+                            meeting_id, position, title, description, assignee,
+                            priority, acceptance_criteria, status, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (meeting_id, pos, title, desc, assignee, priority, ac_json, status, now_str, now_str))
+                    migrated_ticket_count += 1
+
+            log.info(f"Migrated {migrated_ticket_count} tickets across {len(meetings_to_migrate)} meetings into tickets table")
+
     log.info(f"Database initialized at {DB_PATH}")
 
 init_db()
@@ -538,6 +660,309 @@ async def delete_project(project_id: int):
         return {"ok": True, "deleted_id": project_id}
 
 
+# ── Departments Endpoints ──────────────────────────────────────────
+
+@app.get("/api/departments")
+async def list_departments():
+    """List departments with member count and member chips."""
+    with get_db() as conn:
+        dept_rows = conn.execute("""
+            SELECT id, name, created_at, updated_at
+            FROM departments
+            ORDER BY name COLLATE NOCASE ASC
+        """).fetchall()
+
+        member_rows = conn.execute("""
+            SELECT id, name, department_id
+            FROM team_members
+            ORDER BY name COLLATE NOCASE ASC
+        """).fetchall()
+
+        members_by_dept = {}
+        for m in member_rows:
+            members_by_dept.setdefault(m["department_id"], []).append({
+                "id": m["id"],
+                "name": m["name"],
+            })
+
+        result = []
+        for d in dept_rows:
+            d_members = members_by_dept.get(d["id"], [])
+            result.append({
+                "id": d["id"],
+                "name": d["name"],
+                "created_at": d["created_at"],
+                "updated_at": d["updated_at"],
+                "member_count": len(d_members),
+                "members": d_members,
+            })
+        return result
+
+
+@app.post("/api/departments")
+async def create_department(request: Request):
+    """Create a new department."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    name = body.get("name")
+    if not name or not str(name).strip():
+        raise HTTPException(status_code=422, detail="Department name is required")
+    name = str(name).strip()
+    if len(name) > 60:
+        raise HTTPException(status_code=422, detail="Department name must be at most 60 characters")
+
+    now = datetime.now(timezone.utc).isoformat()
+    with get_db() as conn:
+        existing = conn.execute(
+            "SELECT id FROM departments WHERE name = ? COLLATE NOCASE", (name,)
+        ).fetchone()
+        if existing:
+            raise HTTPException(status_code=409, detail=f"Department '{name}' already exists")
+
+        cur = conn.execute(
+            "INSERT INTO departments (name, created_at, updated_at) VALUES (?, ?, ?)",
+            (name, now, now)
+        )
+        dept_id = cur.lastrowid
+        return {
+            "id": dept_id,
+            "name": name,
+            "created_at": now,
+            "updated_at": now,
+            "member_count": 0,
+            "members": [],
+        }
+
+
+@app.put("/api/departments/{dept_id}")
+async def update_department(dept_id: int, request: Request):
+    """Update a department's name."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    name = body.get("name")
+    if not name or not str(name).strip():
+        raise HTTPException(status_code=422, detail="Department name is required")
+    name = str(name).strip()
+    if len(name) > 60:
+        raise HTTPException(status_code=422, detail="Department name must be at most 60 characters")
+
+    with get_db() as conn:
+        dept = conn.execute("SELECT id, name, created_at FROM departments WHERE id = ?", (dept_id,)).fetchone()
+        if not dept:
+            raise HTTPException(status_code=404, detail="Department not found")
+
+        conflict = conn.execute(
+            "SELECT id FROM departments WHERE name = ? COLLATE NOCASE AND id != ?",
+            (name, dept_id)
+        ).fetchone()
+        if conflict:
+            raise HTTPException(status_code=409, detail=f"Department '{name}' already exists")
+
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "UPDATE departments SET name = ?, updated_at = ? WHERE id = ?",
+            (name, now, dept_id)
+        )
+
+        member_rows = conn.execute(
+            "SELECT id, name FROM team_members WHERE department_id = ? ORDER BY name COLLATE NOCASE ASC",
+            (dept_id,)
+        ).fetchall()
+        members = [{"id": m["id"], "name": m["name"]} for m in member_rows]
+
+        return {
+            "id": dept_id,
+            "name": name,
+            "created_at": dept["created_at"],
+            "updated_at": now,
+            "member_count": len(members),
+            "members": members,
+        }
+
+
+@app.delete("/api/departments/{dept_id}")
+async def delete_department(dept_id: int):
+    """Delete a department. Blocked if department still has members."""
+    with get_db() as conn:
+        dept = conn.execute("SELECT id, name FROM departments WHERE id = ?", (dept_id,)).fetchone()
+        if not dept:
+            raise HTTPException(status_code=404, detail="Department not found")
+
+        member_count = conn.execute(
+            "SELECT COUNT(*) FROM team_members WHERE department_id = ?", (dept_id,)
+        ).fetchone()[0]
+
+        if member_count > 0:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Move or remove its {member_count} member{'s' if member_count != 1 else ''} first"
+            )
+
+        conn.execute("DELETE FROM departments WHERE id = ?", (dept_id,))
+        return {"ok": True, "deleted_id": dept_id}
+
+
+# ── Team Members Endpoints ─────────────────────────────────────────
+
+@app.get("/api/team-members")
+async def list_team_members():
+    """List team members with department details and assigned ticket count."""
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT m.id, m.name, m.department_id, m.created_at, m.updated_at,
+                   d.name AS department_name,
+                   (SELECT COUNT(*) FROM tickets t WHERE t.assignee_member_id = m.id) AS assigned_ticket_count
+            FROM team_members m
+            LEFT JOIN departments d ON m.department_id = d.id
+            ORDER BY m.name COLLATE NOCASE ASC
+        """).fetchall()
+
+        return [
+            {
+                "id": r["id"],
+                "name": r["name"],
+                "department_id": r["department_id"],
+                "department_name": r["department_name"] or "Unknown",
+                "created_at": r["created_at"],
+                "updated_at": r["updated_at"],
+                "assigned_ticket_count": r["assigned_ticket_count"] or 0,
+            }
+            for r in rows
+        ]
+
+
+@app.post("/api/team-members")
+async def create_team_member(request: Request):
+    """Create a new team member."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    name = body.get("name")
+    if not name or not str(name).strip():
+        raise HTTPException(status_code=422, detail="Member name is required")
+    name = str(name).strip()
+    if len(name) > 100:
+        raise HTTPException(status_code=422, detail="Member name must be at most 100 characters")
+
+    department_id = body.get("department_id")
+    if department_id is None:
+        raise HTTPException(status_code=422, detail="Department is required")
+    try:
+        department_id = int(department_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="Invalid department ID")
+
+    now = datetime.now(timezone.utc).isoformat()
+    with get_db() as conn:
+        dept = conn.execute("SELECT id, name FROM departments WHERE id = ?", (department_id,)).fetchone()
+        if not dept:
+            raise HTTPException(status_code=404, detail="Department not found")
+
+        cur = conn.execute(
+            "INSERT INTO team_members (name, department_id, created_at, updated_at) VALUES (?, ?, ?, ?)",
+            (name, department_id, now, now)
+        )
+        member_id = cur.lastrowid
+        return {
+            "id": member_id,
+            "name": name,
+            "department_id": department_id,
+            "department_name": dept["name"],
+            "created_at": now,
+            "updated_at": now,
+            "assigned_ticket_count": 0,
+        }
+
+
+@app.put("/api/team-members/{member_id}")
+async def update_team_member(member_id: int, request: Request):
+    """Update a team member's name or department."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    name = body.get("name")
+    if not name or not str(name).strip():
+        raise HTTPException(status_code=422, detail="Member name is required")
+    name = str(name).strip()
+    if len(name) > 100:
+        raise HTTPException(status_code=422, detail="Member name must be at most 100 characters")
+
+    department_id = body.get("department_id")
+    if department_id is None:
+        raise HTTPException(status_code=422, detail="Department is required")
+    try:
+        department_id = int(department_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="Invalid department ID")
+
+    with get_db() as conn:
+        member = conn.execute("SELECT id, name, created_at FROM team_members WHERE id = ?", (member_id,)).fetchone()
+        if not member:
+            raise HTTPException(status_code=404, detail="Team member not found")
+
+        dept = conn.execute("SELECT id, name FROM departments WHERE id = ?", (department_id,)).fetchone()
+        if not dept:
+            raise HTTPException(status_code=404, detail="Department not found")
+
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "UPDATE team_members SET name = ?, department_id = ?, updated_at = ? WHERE id = ?",
+            (name, department_id, now, member_id)
+        )
+
+        # Update tickets assigned to this member with the new spelling
+        conn.execute(
+            "UPDATE tickets SET assignee = ?, updated_at = ? WHERE assignee_member_id = ?",
+            (name, now, member_id)
+        )
+
+        ticket_count = conn.execute(
+            "SELECT COUNT(*) FROM tickets WHERE assignee_member_id = ?", (member_id,)
+        ).fetchone()[0]
+
+        return {
+            "id": member_id,
+            "name": name,
+            "department_id": department_id,
+            "department_name": dept["name"],
+            "created_at": member["created_at"],
+            "updated_at": now,
+            "assigned_ticket_count": ticket_count or 0,
+        }
+
+
+@app.delete("/api/team-members/{member_id}")
+async def delete_team_member(member_id: int):
+    """Delete a team member. Assigned tickets keep their assignee name text and become not on team."""
+    with get_db() as conn:
+        member = conn.execute("SELECT id, name FROM team_members WHERE id = ?", (member_id,)).fetchone()
+        if not member:
+            raise HTTPException(status_code=404, detail="Team member not found")
+
+        ticket_count = conn.execute(
+            "SELECT COUNT(*) FROM tickets WHERE assignee_member_id = ?", (member_id,)
+        ).fetchone()[0]
+
+        # SQLite foreign key ON DELETE SET NULL clears assignee_member_id, preserving assignee text
+        conn.execute("DELETE FROM team_members WHERE id = ?", (member_id,))
+
+        return {
+            "ok": True,
+            "deleted_id": member_id,
+            "assigned_ticket_count": ticket_count or 0,
+        }
+
+
 @app.get("/api/projects/{project_id}/meetings")
 async def list_project_meetings(project_id: int):
     """List lightweight meetings for a project, newest first."""
@@ -547,23 +972,18 @@ async def list_project_meetings(project_id: int):
             raise HTTPException(status_code=404, detail="Project not found.")
 
         rows = conn.execute("""
-            SELECT id, project_id, created_at, input_type, whisper_model, llm_model,
-                   transcript, tickets_json
-            FROM meetings
-            WHERE project_id = ?
-            ORDER BY created_at DESC
+            SELECT m.id, m.project_id, m.created_at, m.input_type, m.whisper_model, m.llm_model,
+                   m.transcript,
+                   (SELECT COUNT(*) FROM tickets t WHERE t.meeting_id = m.id) AS ticket_count
+            FROM meetings m
+            WHERE m.project_id = ?
+            ORDER BY m.created_at DESC
         """, (project_id,)).fetchall()
 
         meetings = []
         for r in rows:
             raw_transcript = r["transcript"] or ""
             snippet = raw_transcript[:120] + ("..." if len(raw_transcript) > 120 else "")
-
-            try:
-                tickets_data = json.loads(r["tickets_json"]) if r["tickets_json"] else []
-                ticket_count = len(tickets_data) if isinstance(tickets_data, list) else 0
-            except Exception:
-                ticket_count = 0
 
             meetings.append({
                 "id": r["id"],
@@ -572,7 +992,7 @@ async def list_project_meetings(project_id: int):
                 "input_type": r["input_type"],
                 "whisper_model": r["whisper_model"],
                 "llm_model": r["llm_model"],
-                "ticket_count": ticket_count,
+                "ticket_count": r["ticket_count"] or 0,
                 "transcript_snippet": snippet,
             })
         return meetings
@@ -580,7 +1000,7 @@ async def list_project_meetings(project_id: int):
 
 @app.get("/api/meetings/{meeting_id}")
 async def get_meeting(meeting_id: int):
-    """Get full meeting details including transcript, tickets, and has_audio flag."""
+    """Get full meeting details including transcript, tickets from tickets table, and has_audio flag."""
     with get_db() as conn:
         row = conn.execute("""
             SELECT m.id, m.project_id, m.created_at, m.input_type,
@@ -595,10 +1015,61 @@ async def get_meeting(meeting_id: int):
         if not row:
             raise HTTPException(status_code=404, detail="Meeting not found.")
 
-        try:
-            tickets = json.loads(row["tickets_json"]) if row["tickets_json"] else []
-        except Exception:
-            tickets = []
+        # Read tickets from the tickets table ordered by position
+        ticket_rows = conn.execute("""
+            SELECT t.id, t.meeting_id, t.position, t.title, t.description,
+                   t.assignee, t.assignee_member_id, t.priority, t.acceptance_criteria, t.status,
+                   t.created_at, t.updated_at,
+                   m.name AS member_name,
+                   d.name AS department_name
+            FROM tickets t
+            LEFT JOIN team_members m ON t.assignee_member_id = m.id
+            LEFT JOIN departments d ON m.department_id = d.id
+            WHERE t.meeting_id = ?
+            ORDER BY t.position ASC, t.id ASC
+        """, (meeting_id,)).fetchall()
+
+        tickets = []
+        for tr in ticket_rows:
+            try:
+                ac_list = json.loads(tr["acceptance_criteria"]) if tr["acceptance_criteria"] else []
+            except Exception:
+                ac_list = []
+
+            mem_id = tr["assignee_member_id"]
+            if mem_id and tr["member_name"]:
+                display_name = tr["member_name"]
+                dept_name = tr["department_name"]
+                on_team = True
+            elif tr["assignee"]:
+                display_name = tr["assignee"]
+                mem_id = None
+                dept_name = None
+                on_team = False
+            else:
+                display_name = None
+                mem_id = None
+                dept_name = None
+                on_team = False
+
+            tickets.append({
+                "id": tr["id"],
+                "meeting_id": tr["meeting_id"],
+                "position": tr["position"],
+                "title": tr["title"],
+                "description": tr["description"] or "",
+                "assignee": {
+                    "name": display_name,
+                    "member_id": mem_id,
+                    "department": dept_name,
+                    "on_team": on_team,
+                } if display_name else None,
+                "priority": tr["priority"],
+                "acceptance_criteria": ac_list,
+                "status": tr["status"],
+                "created_at": tr["created_at"],
+                "updated_at": tr["updated_at"],
+            })
 
         audio_file = row["audio_file"]
         has_audio = bool(audio_file and (AUDIO_DIR / audio_file).is_file())
@@ -642,6 +1113,253 @@ async def get_meeting_audio(meeting_id: int):
             media_type=media_type,
             content_disposition_type="inline"
         )
+
+
+# ── Ticket Endpoints ──────────────────────────────────────────────
+
+@app.put("/api/tickets/{ticket_id}")
+async def update_ticket(ticket_id: int, request: Request):
+    """Update editable ticket fields with server-side validation, team member linking, and reset-to-pending rule."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Body must be a JSON object")
+
+    allowed_fields = {
+        "title", "description", "priority", "acceptance_criteria",
+        "assignee_member_id", "assignee_name", "assignee"
+    }
+    extra_fields = set(body.keys()) - allowed_fields
+    if extra_fields:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown fields not allowed: {', '.join(sorted(extra_fields))}"
+        )
+
+    errors = {}
+    title = body.get("title")
+    if title is None or not str(title).strip():
+        errors["title"] = "Title is required"
+    elif len(str(title).strip()) > 200:
+        errors["title"] = "Title must be at most 200 characters"
+    else:
+        title = str(title).strip()
+
+    desc = body.get("description", "")
+    if desc is None:
+        desc = ""
+    elif not isinstance(desc, str):
+        errors["description"] = "Description must be text"
+    elif len(desc) > 2000:
+        errors["description"] = "Description must be at most 2000 characters"
+
+    priority = body.get("priority")
+    if not priority or str(priority).lower() not in ("low", "medium", "high"):
+        errors["priority"] = "Priority must be 'low', 'medium', or 'high'"
+    else:
+        priority = str(priority).lower()
+
+    raw_ac = body.get("acceptance_criteria")
+    if raw_ac is None:
+        ac_list = []
+    elif not isinstance(raw_ac, list):
+        errors["acceptance_criteria"] = "Acceptance criteria must be a list of strings"
+    else:
+        clean_ac = [str(item).strip() for item in raw_ac if item is not None and str(item).strip()]
+        if len(clean_ac) > 20:
+            errors["acceptance_criteria"] = "At most 20 acceptance criteria allowed"
+        else:
+            for item in clean_ac:
+                if len(item) > 300:
+                    errors["acceptance_criteria"] = "Each criterion must be at most 300 characters"
+                    break
+        ac_list = clean_ac
+
+    # Assignee handling:
+    # If a member id is given, the server sets the name from that member and ignores any text;
+    # if not, the text is stored as the not-on-team name. Reject an unknown member id with a clear error.
+    raw_member_id = body.get("assignee_member_id")
+    raw_text = body.get("assignee_name")
+    if raw_text is None:
+        raw_text = body.get("assignee")
+
+    target_member_id = None
+    target_assignee_name = None
+    target_dept_name = None
+    target_on_team = False
+
+    if raw_member_id is not None and str(raw_member_id).strip() != "":
+        try:
+            target_member_id = int(raw_member_id)
+        except (ValueError, TypeError):
+            errors["assignee_member_id"] = "Invalid member ID"
+    else:
+        if raw_text is not None and str(raw_text).strip():
+            clean_txt = str(raw_text).strip()
+            if clean_txt.startswith("@"):
+                clean_txt = clean_txt[1:].strip()
+            if len(clean_txt) > 100:
+                errors["assignee_name"] = "Assignee name must be at most 100 characters"
+            else:
+                target_assignee_name = clean_txt
+        else:
+            target_assignee_name = None
+
+    if errors:
+        return JSONResponse(status_code=422, content={"detail": "Validation error", "errors": errors})
+
+    with get_db() as conn:
+        current = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
+        if not current:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+
+        if target_member_id is not None:
+            mem = conn.execute("""
+                SELECT m.id, m.name, d.name AS department_name
+                FROM team_members m
+                LEFT JOIN departments d ON m.department_id = d.id
+                WHERE m.id = ?
+            """, (target_member_id,)).fetchone()
+            if not mem:
+                raise HTTPException(status_code=404, detail="Team member not found")
+            target_assignee_name = mem["name"]
+            target_dept_name = mem["department_name"]
+            target_on_team = True
+
+        try:
+            curr_ac = json.loads(current["acceptance_criteria"]) if current["acceptance_criteria"] else []
+        except Exception:
+            curr_ac = []
+
+        curr_title = current["title"] or ""
+        curr_desc = current["description"] or ""
+        curr_priority = current["priority"] or ""
+        curr_assignee = current["assignee"] or ""
+        curr_member_id = current["assignee_member_id"]
+
+        new_assignee_str = target_assignee_name or ""
+
+        content_changed = (
+            curr_title != title or
+            curr_desc != desc or
+            curr_priority != priority or
+            curr_ac != ac_list or
+            curr_assignee != new_assignee_str or
+            curr_member_id != target_member_id
+        )
+
+        new_status = current["status"]
+        if content_changed and current["status"] == "approved":
+            new_status = "pending"
+
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute("""
+            UPDATE tickets
+            SET title = ?, description = ?, assignee = ?, assignee_member_id = ?,
+                priority = ?, acceptance_criteria = ?, status = ?, updated_at = ?
+            WHERE id = ?
+        """, (title, desc, target_assignee_name, target_member_id, priority, json.dumps(ac_list), new_status, now, ticket_id))
+
+        return {
+            "id": ticket_id,
+            "meeting_id": current["meeting_id"],
+            "position": current["position"],
+            "title": title,
+            "description": desc,
+            "assignee": {
+                "name": target_assignee_name,
+                "member_id": target_member_id,
+                "department": target_dept_name,
+                "on_team": target_on_team,
+            } if target_assignee_name else None,
+            "priority": priority,
+            "acceptance_criteria": ac_list,
+            "status": new_status,
+            "created_at": current["created_at"],
+            "updated_at": now,
+        }
+
+
+@app.put("/api/tickets/{ticket_id}/status")
+async def update_ticket_status(ticket_id: int, request: Request):
+    """Set ticket status to 'approved' or 'pending'."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Body must be a JSON object")
+
+    new_status = body.get("status")
+    if new_status not in ("approved", "pending"):
+        raise HTTPException(status_code=422, detail="Status must be 'approved' or 'pending'")
+
+    with get_db() as conn:
+        current = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
+        if not current:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "UPDATE tickets SET status = ?, updated_at = ? WHERE id = ?",
+            (new_status, now, ticket_id)
+        )
+
+        row = conn.execute("""
+            SELECT t.id, t.meeting_id, t.position, t.title, t.description,
+                   t.assignee, t.assignee_member_id, t.priority, t.acceptance_criteria, t.status,
+                   t.created_at, t.updated_at,
+                   m.name AS member_name,
+                   d.name AS department_name
+            FROM tickets t
+            LEFT JOIN team_members m ON t.assignee_member_id = m.id
+            LEFT JOIN departments d ON m.department_id = d.id
+            WHERE t.id = ?
+        """, (ticket_id,)).fetchone()
+
+        try:
+            ac_list = json.loads(row["acceptance_criteria"]) if row["acceptance_criteria"] else []
+        except Exception:
+            ac_list = []
+
+        mem_id = row["assignee_member_id"]
+        if mem_id and row["member_name"]:
+            disp_name = row["member_name"]
+            dept = row["department_name"]
+            on_team = True
+        elif row["assignee"]:
+            disp_name = row["assignee"]
+            mem_id = None
+            dept = None
+            on_team = False
+        else:
+            disp_name = None
+            mem_id = None
+            dept = None
+            on_team = False
+
+        return {
+            "id": row["id"],
+            "meeting_id": row["meeting_id"],
+            "position": row["position"],
+            "title": row["title"],
+            "description": row["description"] or "",
+            "assignee": {
+                "name": disp_name,
+                "member_id": mem_id,
+                "department": dept,
+                "on_team": on_team,
+            } if disp_name else None,
+            "priority": row["priority"],
+            "acceptance_criteria": ac_list,
+            "status": row["status"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
 
 
 @app.get("/api/health")
@@ -1016,8 +1734,52 @@ async def run_pipeline(job: Job, text: Optional[str], audio_path: Optional[Path]
         # Stage 4: ticket extraction
         tickets = await extract_tickets(transcript, job)
 
+        # Automatic matching of model's names to team members (runs once per job with 1 DB query)
+        match_t0 = time.monotonic()
+        with get_db() as conn:
+            member_rows = conn.execute("""
+                SELECT m.id, m.name, d.name AS department_name
+                FROM team_members m
+                LEFT JOIN departments d ON m.department_id = d.id
+            """).fetchall()
+            team_refs = [TeamMemberRef(r["id"], r["name"], r["department_name"] or "") for r in member_rows]
+
+        matched_count = 0
+        named_count = 0
+        non_exact_pairs = []
+
+        for t in tickets:
+            raw_assignee = t.get("assignee")
+            if raw_assignee and str(raw_assignee).strip():
+                named_count += 1
+                matched_member, is_exact = match_assignee(str(raw_assignee), team_refs)
+                if matched_member:
+                    matched_count += 1
+                    t["assignee_member_id"] = matched_member.id
+                    t["assignee_department"] = matched_member.department_name
+                    if not is_exact:
+                        non_exact_pairs.append(f"{str(raw_assignee).strip()} -> {matched_member.name}")
+                    # Use member's database spelling
+                    t["assignee"] = matched_member.name
+                else:
+                    t["assignee_member_id"] = None
+                    t["assignee_department"] = None
+            else:
+                t["assignee"] = None
+                t["assignee_member_id"] = None
+                t["assignee_department"] = None
+
+        match_ms = round((time.monotonic() - match_t0) * 1000, 2)
+        match_detail = f"Matched {matched_count}/{named_count} assignees in {match_ms}ms"
+        if non_exact_pairs:
+            match_detail += f" ({', '.join(non_exact_pairs)})"
+
+        log.info(f"Assignee matching: {match_detail}")
+        if match_ms > 50:
+            log.warning(f"Assignee matching took longer than 50ms: {match_ms}ms")
+
         # Stage 5: validation
-        job.emit("validation", "done", ticket_count=len(tickets))
+        job.emit("validation", "done", ticket_count=len(tickets), assignee_matching=match_detail)
 
         # Stage 6: done
         total = round(time.monotonic() - t0, 2)
@@ -1032,6 +1794,7 @@ async def run_pipeline(job: Job, text: Optional[str], audio_path: Optional[Path]
         saved_meeting_id = None
         save_error = None
         saved_audio_filename = None
+        saved_tickets = []
         try:
             now = datetime.now(timezone.utc).isoformat()
             input_type = "audio" if audio_path else "text"
@@ -1050,7 +1813,54 @@ async def run_pipeline(job: Job, text: Optional[str], audio_path: Optional[Path]
                     (project_id, now, input_type, transcript, tickets_json_str, whisper_mod, llm_mod)
                 )
                 saved_meeting_id = cur.lastrowid
-                log.info(f"Saved meeting {saved_meeting_id} under project {project_id}")
+
+                # Insert tickets in the same database transaction as the meeting row
+                for pos, t in enumerate(tickets):
+                    title = str(t.get("title") or "Untitled Ticket").strip()
+                    desc = str(t.get("description") or "")
+                    assignee = t.get("assignee")
+                    if assignee:
+                        assignee = str(assignee).strip()
+                    member_id = t.get("assignee_member_id")
+                    priority = str(t.get("priority") or "medium").lower()
+                    if priority not in ("low", "medium", "high"):
+                        priority = "medium"
+                    ac = t.get("acceptance_criteria") or []
+                    if not isinstance(ac, list):
+                        ac = []
+                    ac_json = json.dumps(ac)
+                    status = "pending"
+
+                    t_cur = conn.execute(
+                        """
+                        INSERT INTO tickets (
+                            meeting_id, position, title, description, assignee,
+                            priority, acceptance_criteria, status, assignee_member_id,
+                            created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (saved_meeting_id, pos, title, desc, assignee, priority, ac_json, status, member_id, now, now)
+                    )
+                    saved_tickets.append({
+                        "id": t_cur.lastrowid,
+                        "meeting_id": saved_meeting_id,
+                        "position": pos,
+                        "title": title,
+                        "description": desc,
+                        "assignee": {
+                            "name": assignee,
+                            "member_id": member_id,
+                            "department": t.get("assignee_department"),
+                            "on_team": bool(member_id),
+                        } if assignee else None,
+                        "priority": priority,
+                        "acceptance_criteria": ac,
+                        "status": status,
+                        "created_at": now,
+                        "updated_at": now,
+                    })
+
+                log.info(f"Saved meeting {saved_meeting_id} with {len(saved_tickets)} tickets under project {project_id}")
 
             # If audio input, save the original uploaded file to data/audio/
             if audio_path and saved_meeting_id:
@@ -1080,7 +1890,7 @@ async def run_pipeline(job: Job, text: Optional[str], audio_path: Optional[Path]
         job.emit("done", "done",
                  total_elapsed_s=total,
                  stage_times=stage_times,
-                 tickets=tickets,
+                 tickets=saved_tickets if saved_meeting_id else tickets,
                  transcript=transcript,
                  meeting_id=saved_meeting_id,
                  save_error=save_error)
