@@ -29,6 +29,7 @@ const state = {
   savedMeetingTickets: [],
   activeMeetingTab: 'tickets',
   currentSavedMeeting: null,
+  transcribeAudioUrl: null,
 };
 
 // ── DOM Elements ──
@@ -93,6 +94,11 @@ function initElements() {
   els.completionSummaryBar = document.getElementById('completion-summary-bar');
   els.summaryTimingText = document.getElementById('summary-timing-text');
 
+  // Transcribe Audio Player Elements
+  els.transcribeAudioWrapper = document.getElementById('transcribe-audio-wrapper');
+  els.transcribeAudioPlayer = document.getElementById('transcribe-audio-player');
+  els.transcribeAudioUnsupported = document.getElementById('transcribe-audio-unsupported');
+
   els.drawerBackdrop = document.getElementById('drawer-backdrop');
   els.drawer = document.getElementById('drawer');
   els.btnCloseDrawer = document.getElementById('drawer-close-btn');
@@ -138,6 +144,11 @@ function initElements() {
   els.meetingTicketsList = document.getElementById('meeting-tickets-list');
   els.meetingTranscriptCard = document.getElementById('meeting-transcript-card');
 
+  // Saved Meeting Audio Player Elements
+  els.meetingAudioWrapper = document.getElementById('meeting-audio-wrapper');
+  els.meetingAudioPlayer = document.getElementById('meeting-audio-player');
+  els.meetingAudioUnsupported = document.getElementById('meeting-audio-unsupported');
+
   // Project Dialog Elements
   els.projectDialog = document.getElementById('project-dialog');
   els.projectDialogForm = document.getElementById('project-dialog-form');
@@ -165,6 +176,57 @@ function initElements() {
   els.projectEmptyAlert = document.getElementById('project-empty-alert');
 }
 
+// ── Transcribe Audio Playback ──
+function setupTranscribeAudio(file) {
+  cleanupTranscribeAudio();
+  if (!file || !els.transcribeAudioWrapper || !els.transcribeAudioPlayer) return;
+
+  els.transcribeAudioWrapper.style.display = 'block';
+  els.transcribeAudioPlayer.style.display = 'block';
+  if (els.transcribeAudioUnsupported) {
+    els.transcribeAudioUnsupported.style.display = 'none';
+  }
+
+  // Check if browser definitively doesn't support the file MIME type
+  if (file.type && els.transcribeAudioPlayer.canPlayType && els.transcribeAudioPlayer.canPlayType(file.type) === '') {
+    els.transcribeAudioPlayer.style.display = 'none';
+    if (els.transcribeAudioUnsupported) {
+      els.transcribeAudioUnsupported.style.display = 'flex';
+    }
+    return;
+  }
+
+  try {
+    state.transcribeAudioUrl = URL.createObjectURL(file);
+    els.transcribeAudioPlayer.src = state.transcribeAudioUrl;
+    els.transcribeAudioPlayer.load();
+  } catch (err) {
+    els.transcribeAudioPlayer.style.display = 'none';
+    if (els.transcribeAudioUnsupported) {
+      els.transcribeAudioUnsupported.style.display = 'flex';
+    }
+  }
+}
+
+function cleanupTranscribeAudio() {
+  if (els.transcribeAudioPlayer) {
+    els.transcribeAudioPlayer.pause();
+    els.transcribeAudioPlayer.removeAttribute('src');
+    els.transcribeAudioPlayer.load();
+    els.transcribeAudioPlayer.style.display = 'block';
+  }
+  if (state.transcribeAudioUrl) {
+    URL.revokeObjectURL(state.transcribeAudioUrl);
+    state.transcribeAudioUrl = null;
+  }
+  if (els.transcribeAudioWrapper) {
+    els.transcribeAudioWrapper.style.display = 'none';
+  }
+  if (els.transcribeAudioUnsupported) {
+    els.transcribeAudioUnsupported.style.display = 'none';
+  }
+}
+
 // ── State Switching ──
 function switchView(viewName) {
   state.currentView = viewName;
@@ -175,12 +237,16 @@ function switchView(viewName) {
   if (viewName === 'start') {
     els.stateStart.classList.add('active');
     els.btnNewMeeting.style.display = 'none';
+    cleanupTranscribeAudio();
   } else if (viewName === 'processing') {
     els.stateProcessing.classList.add('active');
     els.btnNewMeeting.style.display = 'none';
   } else if (viewName === 'results') {
     els.stateResults.classList.add('active');
     els.btnNewMeeting.style.display = 'inline-flex';
+    if (state.activeInputTab !== 'audio') {
+      cleanupTranscribeAudio();
+    }
   }
 }
 
@@ -192,6 +258,15 @@ function handleRoute() {
   const isProjects = hash.startsWith('#/projects');
   if (els.navTranscribe) els.navTranscribe.classList.toggle('active', !isProjects);
   if (els.navProjects) els.navProjects.classList.toggle('active', isProjects);
+
+  if (isProjects) {
+    cleanupTranscribeAudio();
+  }
+
+  const isMeetingDetail = Boolean(hash.match(/^#\/projects\/(\d+)\/meetings\/(\d+)$/));
+  if (!isMeetingDetail) {
+    cleanupMeetingAudio();
+  }
 
   // Top-bar controls (model pills, status, diagnostics) are only shown on Transcribe view
   if (els.topBarTranscribeControls) {
@@ -476,10 +551,40 @@ async function loadMeetingDetail(projectId, meetingId) {
       els.meetingTranscriptCard.textContent = meeting.transcript || 'No transcript available.';
     }
 
+    // Saved audio player
+    if (meeting.has_audio) {
+      if (els.meetingAudioWrapper) els.meetingAudioWrapper.style.display = 'block';
+      if (els.meetingAudioPlayer) {
+        els.meetingAudioPlayer.style.display = 'block';
+        els.meetingAudioPlayer.src = `/api/meetings/${meetingId}/audio`;
+        els.meetingAudioPlayer.load();
+      }
+      if (els.meetingAudioUnsupported) {
+        els.meetingAudioUnsupported.style.display = 'none';
+      }
+    } else {
+      cleanupMeetingAudio();
+    }
+
     // Default to tickets tab
     switchMeetingTab('tickets');
   } catch (err) {
     appendLog(`Failed to load meeting ${meetingId}: ${err.message}`);
+  }
+}
+
+function cleanupMeetingAudio() {
+  if (els.meetingAudioPlayer) {
+    els.meetingAudioPlayer.pause();
+    els.meetingAudioPlayer.removeAttribute('src');
+    els.meetingAudioPlayer.load();
+    els.meetingAudioPlayer.style.display = 'block';
+  }
+  if (els.meetingAudioWrapper) {
+    els.meetingAudioWrapper.style.display = 'none';
+  }
+  if (els.meetingAudioUnsupported) {
+    els.meetingAudioUnsupported.style.display = 'none';
   }
 }
 
@@ -1117,10 +1222,12 @@ async function submitMeeting() {
   if (state.activeInputTab === 'audio') {
     if (!state.selectedAudioFile) return;
     formData.append('audio', state.selectedAudioFile);
+    setupTranscribeAudio(state.selectedAudioFile);
   } else {
     const textVal = els.notesInput.value.trim();
     if (!textVal) return;
     formData.append('text', textVal);
+    cleanupTranscribeAudio();
   }
 
   // Switch to Processing State View
@@ -1392,6 +1499,30 @@ function bindEvents() {
   }
   if (els.btnMeetingCopyAll) {
     els.btnMeetingCopyAll.addEventListener('click', copyAllSavedTickets);
+  }
+
+  // Transcribe audio error handler (unsupported audio format fallback)
+  if (els.transcribeAudioPlayer) {
+    els.transcribeAudioPlayer.addEventListener('error', () => {
+      if (els.transcribeAudioPlayer.src) {
+        els.transcribeAudioPlayer.style.display = 'none';
+        if (els.transcribeAudioUnsupported) {
+          els.transcribeAudioUnsupported.style.display = 'flex';
+        }
+      }
+    });
+  }
+
+  // Saved meeting audio error handler (unsupported audio format fallback)
+  if (els.meetingAudioPlayer) {
+    els.meetingAudioPlayer.addEventListener('error', () => {
+      if (els.meetingAudioPlayer.src) {
+        els.meetingAudioPlayer.style.display = 'none';
+        if (els.meetingAudioUnsupported) {
+          els.meetingAudioUnsupported.style.display = 'flex';
+        }
+      }
+    });
   }
 
   // Hash routing listener

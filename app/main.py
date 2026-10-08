@@ -4,7 +4,7 @@ Manages whisper-server and llama-server processes,
 proxies requests, and streams diagnostics via SSE.
 """
 
-import asyncio, hashlib, json, logging, os, re, shutil, sqlite3, subprocess, time, uuid
+import asyncio, hashlib, json, logging, mimetypes, os, re, shutil, sqlite3, subprocess, time, uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -15,6 +15,14 @@ from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+# Ensure common audio MIME types are registered
+mimetypes.add_type("audio/mp4", ".m4a")
+mimetypes.add_type("audio/ogg", ".ogg")
+mimetypes.add_type("audio/webm", ".webm")
+mimetypes.add_type("audio/flac", ".flac")
+mimetypes.add_type("audio/wav", ".wav")
+mimetypes.add_type("audio/mpeg", ".mp3")
 
 # ── Logging ────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -33,6 +41,8 @@ UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
+AUDIO_DIR = DATA_DIR / "audio"
+AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "meeting_tickets.db"
 
 # ── SQLite Database ────────────────────────────────────────────────
@@ -44,6 +54,7 @@ def get_db():
 
 def init_db():
     DATA_DIR.mkdir(exist_ok=True)
+    AUDIO_DIR.mkdir(parents=True, exist_ok=True)
     with get_db() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS projects (
@@ -63,9 +74,15 @@ def init_db():
                 tickets_json TEXT NOT NULL,
                 whisper_model TEXT,
                 llm_model TEXT,
+                audio_file TEXT,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             );
         """)
+        # Migration: check if audio_file column exists on existing databases
+        columns = [row["name"] for row in conn.execute("PRAGMA table_info(meetings)").fetchall()]
+        if "audio_file" not in columns:
+            conn.execute("ALTER TABLE meetings ADD COLUMN audio_file TEXT;")
+            log.info("Migrated meetings table: added audio_file column")
     log.info(f"Database initialized at {DB_PATH}")
 
 init_db()
@@ -500,11 +517,22 @@ async def update_project(project_id: int, body: ProjectUpdate):
 
 @app.delete("/api/projects/{project_id}")
 async def delete_project(project_id: int):
-    """Delete a project and cascade delete all its meetings."""
+    """Delete a project and cascade delete all its meetings and associated audio files."""
     with get_db() as conn:
         existing = conn.execute("SELECT id FROM projects WHERE id = ?", (project_id,)).fetchone()
         if not existing:
             raise HTTPException(status_code=404, detail="Project not found.")
+
+        # Clean up audio files for meetings in this project
+        meetings = conn.execute("SELECT audio_file FROM meetings WHERE project_id = ?", (project_id,)).fetchall()
+        for m in meetings:
+            if m["audio_file"]:
+                fpath = AUDIO_DIR / m["audio_file"]
+                try:
+                    if fpath.exists():
+                        fpath.unlink()
+                except Exception as e:
+                    log.warning(f"Error removing audio file {fpath}: {e}")
 
         conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
         return {"ok": True, "deleted_id": project_id}
@@ -552,11 +580,12 @@ async def list_project_meetings(project_id: int):
 
 @app.get("/api/meetings/{meeting_id}")
 async def get_meeting(meeting_id: int):
-    """Get full meeting details including transcript and tickets."""
+    """Get full meeting details including transcript, tickets, and has_audio flag."""
     with get_db() as conn:
         row = conn.execute("""
             SELECT m.id, m.project_id, m.created_at, m.input_type,
                    m.whisper_model, m.llm_model, m.transcript, m.tickets_json,
+                   m.audio_file,
                    p.name AS project_name
             FROM meetings m
             LEFT JOIN projects p ON m.project_id = p.id
@@ -571,6 +600,9 @@ async def get_meeting(meeting_id: int):
         except Exception:
             tickets = []
 
+        audio_file = row["audio_file"]
+        has_audio = bool(audio_file and (AUDIO_DIR / audio_file).is_file())
+
         return {
             "id": row["id"],
             "project_id": row["project_id"],
@@ -581,7 +613,35 @@ async def get_meeting(meeting_id: int):
             "llm_model": row["llm_model"],
             "transcript": row["transcript"] or "",
             "tickets": tickets,
+            "has_audio": has_audio,
         }
+
+
+@app.api_route("/api/meetings/{meeting_id}/audio", methods=["GET", "HEAD"])
+async def get_meeting_audio(meeting_id: int):
+    """Stream saved audio file with HTTP Range support for scrubbing."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT audio_file FROM meetings WHERE id = ?",
+            (meeting_id,)
+        ).fetchone()
+
+        if not row or not row["audio_file"]:
+            raise HTTPException(status_code=404, detail="Audio file not found for this meeting.")
+
+        file_path = AUDIO_DIR / row["audio_file"]
+        if not file_path.is_file():
+            raise HTTPException(status_code=404, detail="Audio file does not exist on disk.")
+
+        media_type, _ = mimetypes.guess_type(str(file_path))
+        if not media_type:
+            media_type = "application/octet-stream"
+
+        return FileResponse(
+            path=str(file_path),
+            media_type=media_type,
+            content_disposition_type="inline"
+        )
 
 
 @app.get("/api/health")
@@ -971,6 +1031,7 @@ async def run_pipeline(job: Job, text: Optional[str], audio_path: Optional[Path]
         # Save meeting row to database
         saved_meeting_id = None
         save_error = None
+        saved_audio_filename = None
         try:
             now = datetime.now(timezone.utc).isoformat()
             input_type = "audio" if audio_path else "text"
@@ -990,6 +1051,28 @@ async def run_pipeline(job: Job, text: Optional[str], audio_path: Optional[Path]
                 )
                 saved_meeting_id = cur.lastrowid
                 log.info(f"Saved meeting {saved_meeting_id} under project {project_id}")
+
+            # If audio input, save the original uploaded file to data/audio/
+            if audio_path and saved_meeting_id:
+                try:
+                    ext = Path(audio_filename).suffix.lower() if audio_filename else ".wav"
+                    ext = re.sub(r"[^a-zA-Z0-9.]", "", ext)[:10] or ".wav"
+                    if not ext.startswith("."):
+                        ext = f".{ext}"
+                    saved_audio_filename = f"meeting_{saved_meeting_id}{ext}"
+                    dest_path = AUDIO_DIR / saved_audio_filename
+                    shutil.copy2(audio_path, dest_path)
+
+                    with get_db() as conn:
+                        conn.execute(
+                            "UPDATE meetings SET audio_file = ? WHERE id = ?",
+                            (saved_audio_filename, saved_meeting_id)
+                        )
+                    log.info(f"Saved audio for meeting {saved_meeting_id} to {dest_path}")
+                except Exception as audio_err:
+                    log.error(f"Failed to save audio file for meeting {saved_meeting_id}: {audio_err}")
+                    save_error = f"Audio saving failed: {audio_err}"
+
         except Exception as db_err:
             log.error(f"Failed to save meeting to DB: {db_err}")
             save_error = str(db_err)

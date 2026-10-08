@@ -284,6 +284,15 @@
       </div>
     </section>
 
+    <!-- ── Transcribe Audio Player (visible during processing and results for audio runs) ── -->
+    <div id="transcribe-audio-wrapper" class="audio-player-wrapper" style="display: none;">
+      <audio id="transcribe-audio-player" class="native-audio-player" controls aria-label="Audio playback of uploaded recording" preload="metadata"></audio>
+      <div id="transcribe-audio-unsupported" class="audio-unsupported-notice" style="display: none;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        <span>This audio format can't be previewed in the browser</span>
+      </div>
+    </div>
+
     <!-- ── State 2: Processing State (Stepper) ── -->
     <section id="state-processing" class="state-view" aria-labelledby="proc-title">
       <div class="processing-card">
@@ -552,6 +561,15 @@
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
                 <span id="meeting-view-llm">qwen3-8b</span>
               </span>
+            </div>
+          </div>
+
+          <!-- Saved Meeting Audio Player (visible only if meeting has audio) -->
+          <div id="meeting-audio-wrapper" class="audio-player-wrapper meeting-audio-wrapper" style="display: none;">
+            <audio id="meeting-audio-player" class="native-audio-player" controls aria-label="Audio playback of saved meeting recording" preload="metadata"></audio>
+            <div id="meeting-audio-unsupported" class="audio-unsupported-notice" style="display: none;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+              <span>This audio format can't be previewed in the browser</span>
             </div>
           </div>
 
